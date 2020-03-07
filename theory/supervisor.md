@@ -94,8 +94,22 @@ end
 
 
 ## Functions
+```
+child_spec/2
+count_children/1
+delete_child/2
+init/2
+restart_child/2
+start_child/2
+start_link/2
+start_link/3
+stop/3
+terminate_child/2
+which_children/1
+```
 
 ### Supervisor
+
 ```elixir
 stop(
     supervisor(), 
@@ -124,9 +138,10 @@ which_children(supervisor()) :: [
 
 ```elixir
 start_child(
-  supervisor(), :supervisor.child_spec() 
-                | {module(), term()} 
-                | module()
+    supervisor(), 
+    :supervisor.child_spec()
+    | {module(), term()} 
+    | module()
 )
 ::  {:ok, child()}
     | {:ok, child(), info :: term()}
@@ -134,7 +149,7 @@ start_child(
             {:already_started, child()} 
             | :already_present 
             | term()
-}
+    }
 
 restart_child(
     supervisor(), child_id
