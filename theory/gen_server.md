@@ -288,3 +288,9 @@ Agent.update(pid, fn state -> state + 1 end)
 Not mentioned here:
 - everything regarding distribution
 - everything regarding code changes
+
+Plan for March 7:
+- supervisor
+- dynamic supervisor
+- task
+- task supervisor
