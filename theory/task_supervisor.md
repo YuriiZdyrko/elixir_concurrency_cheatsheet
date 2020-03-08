@@ -43,26 +43,56 @@ end)
 
 ### Functions
 ```elixir
-options()
-    shutdown
-        timeout \\ 500
-        | :brutal_kill
-
-
-Task.Supervisor
     
-    # The task will be linked also to the caller
-    
-    async(supervisor(), () -> any(), options()) 
-    :: Task.t()
+async(supervisor, f, options \\ []) 
+| async(supervisor, m, f, a, options \\ []) 
+:: Task.t()
 
-    async(supervisor, module, fun, args, options())
-    :: Task.t()
+async_nolink(supervisor, f, options \\ [])
+| async_nolink(supervisor, m, f, a, options())
+:: Task.t()
 
-    # The task will not be linked to the caller
+async options
+    shutdown: timeout \\ 5000 | :brutal_kill
+
+--------------------------------------------
+
+async_stream(supervisor, enumerable, fun, options \\ [])
+| async_stream(supervisor, enumerable, m, f, a, options \\ [])
+:: Enumerable.t()
+
+async_stream_nolink(supervisor, enumerable, fun, options \\ [])
+| async_stream_nolink(supervisor, enumerable, m, f, a, options \\ [])
+:: Enumerable.t()
+
+async_stream options
+    max_concurrency:
+        number_of_concurrent_tasks \\ System.schedulers_online/0
+    ordered:
+        keep_results_order \\ true
+    timeout:
+        timeout_for_a_task \\ 5000
+    on_timeout:
+        :exit (default) # process that spawned the tasks exits
+        | :kill_task    # task is killed, return value for task is {:exit, :timeout}
+    shutdown:
+        shutdown: timeout \\ 5000 | :brutal_kill
+
+--------------------------------------------
+
+children(supervisor) 
+    :: [pid, ...]
+
+start_child(supervisor, f, options \\ [])
+| start_child(supervisor, m, f, a, options \\ [])
+    :: same_as_dynamic_supervisor
     
-    async_nolink(supervisor, fun, options())
-    :: Task.t()
+    start_child options
+        restart: :temporary | :transient | :permanent
+        shutdown: timeout \\ 5000 | :brutal_kill
+
+terminate_child(supervisor, pid) 
+    :: :ok | {:error, :not_found}
 ```
 
 #### More on Task.Supervisor.async
@@ -74,11 +104,11 @@ Task.await(x) + y
 ```
 As before, if heavy_fun/0 fails, the whole computation will fail, including the parent process. If you don't want the task to fail then you must change the heavy_fun/0 code in the same way you would achieve it if you didn't have the async call. For example, to either return {:ok, val} | :error results or, in more extreme cases, by using try/rescue. In other words, an asynchronous task should be thought of as an extension of a process rather than a mechanism to isolate it from all errors.
 
-If you don't want to link the caller to the task, then you must use a supervised task with Task.Supervisor and call Task.Supervisor.async_nolink/2.
+***If you don't want to link the caller to the task, then you must use a supervised task with Task.Supervisor and call Task.Supervisor.async_nolink/2.***
 
 #### More on Task.Supervisor.async_nolink
 
-Use it if task failure is likely, and should be handled in some way.
+Use it if task failure is likely, and should be handled in some way. 
     
 In case of task failure, caller receives `:DOWN` message:
 `{:DOWN, ref, :process, _pid, _reason}`
@@ -127,3 +157,12 @@ end
 
 `async_nolink` function requires the task supervisor to have :temporary as the :restart option (the default), as async_nolink/4 keeps a direct reference to the task which is lost if the task is restarted.
 TODO: clarify if `which is lost if the SUPERVISOR is restarted` is true, fix docs
+
+#### More on Task.Supervisor.async_stream
+
+Failure in Task brings caller down as well.
+
+#### More on Task.Supervisor.async_stream_nolink
+
+Failure in Task doesn't bring caller down, but results in {:exit, error} enumberable item result.
+
