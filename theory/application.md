@@ -2,7 +2,7 @@
 
 Applications are the idiomatic way to package software in Erlang/OTP.
 Application = code + environment variables.
-Applications can be started and stopped.
+Applications can be loaded, started and stopped.
 
 ```elixir
 # Run-time environment
