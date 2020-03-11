@@ -1,4 +1,4 @@
-### Config
+## Application configuration
 
 ```elixir
 # config.exs

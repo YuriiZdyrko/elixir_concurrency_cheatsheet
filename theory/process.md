@@ -1,13 +1,12 @@
-### Process
+## Process
 
 #### Functions
 ```elixir
 # Spawn/exit/hybernate
-spawn(fun, opts)
-spawn(mod, fun, args, opts)
+spawn(fun, opts) | spawn(m, f, a, opts)
 exit(pid, reason)
 alive?(pid)
-hibernate(mod, fun_name, args)
+hibernate(m, f, a)
 
 # Flag
 flag(flag, value)
@@ -51,7 +50,6 @@ delete(key)
 
 ```elixir
 # Process.info(pid)
-=>
 [
   current_function: {:gen_server, :loop, 7},
   initial_call: {:proc_lib, :init_p, 5},

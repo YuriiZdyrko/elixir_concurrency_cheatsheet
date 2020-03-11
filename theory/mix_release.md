@@ -1,4 +1,4 @@
-### Mix release
+## Mix release
 
 Assembles a self-contained release for the current project.
 Benefits:
@@ -140,18 +140,33 @@ RELEASE_ROOT
 ```
 
 #### Interacting with a release
+
 ```elixir
-# Preferred way to start system
+# Start system
 _build/prod/rel/my_app/bin/my_app start
 
-# One-off commands
-bin/RELEASE_NAME eval "IO.puts(:hello)"
-bin/RELEASE_NAME rpc "IO.puts(:hello)"
-
-# Stop system (applications and their supervision trees are shut down in opposite to starting order)
+# Stop system (vm, app and supervision trees in opposite to starting order)
 Send SIGINT/SIGTERM to OS process
 | bin/RELEASE_NAME stop
+```
 
+```elixir
+# One-off commands
+
+defmodule MyApp.ReleaseTasks do
+  def eval_purge_stale_data() do
+    Application.ensure_all_started(:my_app)
+
+    # Code that purges stale data
+  end
+end
+
+# >
+bin/RELEASE_NAME eval "MyApp.ReleaseTasks.eval_purge_stale_data()"
+bin/RELEASE_NAME rpc "IO.puts(:hello)"
+```
+
+```elixir
 # All commands (`bin/RELEASE_NAME` help)
 
 start          Starts the system
@@ -165,28 +180,4 @@ restart        Restarts the running system via a remote command
 stop           Stops the running system via a remote command
 pid            Prints the operating system PID of the running system via a remote command
 version        Prints the release name and version to be booted
-```
-
-Convenience to avoid typing manually
-```elixir
-# lib/my_app/release_tasks.ex
-defmodule MyApp.ReleaseTasks do
-  def eval_purge_stale_data() do
-    # Eval commands needs to start the app before
-    # Or Application.load(:my_app) if you can't start it
-    Application.ensure_all_started(:my_app)
-
-    # Code that purges stale data
-    ...
-  end
-
-  def rpc_print_connected_users() do
-    # Code that print users connected to the current running system
-    ...
-  end
-end
-
-# >
-bin/RELEASE_NAME eval "MyApp.ReleaseTasks.eval_purge_stale_data()"
-bin/RELEASE_NAME rpc "MyApp.ReleaseTasks.rpc_print_connected_users()"
 ```

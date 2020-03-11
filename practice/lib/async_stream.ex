@@ -54,12 +54,12 @@ defmodule Practice.AsyncStream do
 
   def fun(arg) do
     Process.sleep(:rand.uniform(4000))
-    
+
     # This will not stop enumeration
     if arg in [10, 11, 12] do
       Process.exit(self(), :normal)
     end
-    
+
     # This would stop async_stream enumeration with error
     # Process.exit(self(), :kill)
 

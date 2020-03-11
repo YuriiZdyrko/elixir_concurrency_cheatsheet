@@ -1,4 +1,6 @@
-### Supervisor = Child specification + Supervision options
+## Supervisor
+
+Supervisor = Child specification + Supervision options
 
 ### Child specification
 ```elixir

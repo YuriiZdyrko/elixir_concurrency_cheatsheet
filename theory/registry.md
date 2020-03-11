@@ -1,7 +1,6 @@
-### Registry
+## Registry
 
 A local, decentralized and scalable key-value process storage.
-
 It allows developers to lookup one or more processes with a given key.
 
 Keys types:

@@ -1,4 +1,4 @@
-### Task.Supervisor
+## Task.Supervisor
 
 Dynamically spawn and supervise tasks.
 Started with no children.

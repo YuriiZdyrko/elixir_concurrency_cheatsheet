@@ -1,4 +1,6 @@
-GenServer is used for:
+## GenServer
+
+used for:
 - mutable state (by abstracting receive loop)
 - enabling concurrency
 - isolating failures
@@ -284,13 +286,3 @@ Agent.update(pid, fn state -> state + 1 end)
    messages_out: 1
  ]}
 ```
-
-Not mentioned here:
-- everything regarding distribution
-- everything regarding code changes
-
-Plan for March 7:
-- supervisor
-- dynamic supervisor
-- task
-- task supervisor

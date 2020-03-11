@@ -1,4 +1,4 @@
-### Application
+## Application
 
 Applications are the idiomatic way to package software in Erlang/OTP.
 Application = code + environment variables.
