@@ -5,4 +5,5 @@ dynamic_supervisor
 registry
 task
 task_supervisor
+config
 mix_release

@@ -1,6 +1,7 @@
 defmodule Practice.ConcatMd do
   @config_file ".concat_md_config"
   @dest_file "cheatsheet.md"
+  @dest_dir "../"
   @src_dir "../theory"
 
   def run(src_dir \\ @src_dir),
@@ -37,7 +38,7 @@ defmodule Practice.ConcatMd do
       File.close(dest)
     end)
 
-    IO.puts("\n" <> Path.join(@src_dir, @dest_file) <> " generated!")
+    IO.puts("\n" <> Path.join(@dest_dir, @dest_file) <> " generated!")
   end
 
   def config(src_dir) do
@@ -55,7 +56,7 @@ defmodule Practice.ConcatMd do
   end
 
   def dest(src_dir) do
-    path = Path.join(src_dir, @dest_file)
+    path = Path.join(@dest_dir, @dest_file)
     File.rm(path)
     File.touch!(path)
     path
