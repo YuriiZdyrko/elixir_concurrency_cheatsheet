@@ -5,3 +5,6 @@ https://medium.com/flatiron-labs/elixir-and-the-beam-how-concurrency-really-work
 
 Process dictionary:
 https://ferd.ca/on-the-use-of-the-process-dictionary-in-erlang.html
+
+handle_continue against race conditions:
+https://medium.com/@tylerpachal/introduction-to-handle-continue-in-elixir-and-when-to-use-it-53ba5519cc17

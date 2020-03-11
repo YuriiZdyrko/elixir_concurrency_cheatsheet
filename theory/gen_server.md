@@ -5,49 +5,58 @@ used for:
 - enabling concurrency
 - isolating failures
 
+### Functions
+
 #### GenServer.start_link
+
+Starts a GenServer process linked to the current process.
+Once the server is started, the `init/1` function of the given module is called with `init_arg` as its argument to initialize the server.
+
 ``` elixir
-GenServer
-    start_link(
-        _,
-        options:
-            name: 
-                atom
-                | {:global, term}
-                | {:via, module, name}
-            timeout:
-                msecs \\ :infinity
-    )
+start_link(
+    module_name,
+    init_arg,
+    options:
+        name: 
+            atom
+            | {:global, term}
+            | {:via, module, name}
+        timeout:
+            msecs \\ :infinity
+)
 ```
 
 #### GenServer.call
+
+Makes a synchronous call to the server and waits for its reply.
+
 ```elixir
-GenServer
-    call(
-        server, 
-        request, 
-        timeout \\ 5000
-    ) :: response
+call(
+    server, 
+    request, 
+    timeout \\ 5000
+) :: response
 ```
 
 #### GenServer.cast
+
+Sends an asynchronous request to the server.
+
 ```elixir
-GenServer
-    cast(
-        server,
-        request
-    ) :: :ok
+cast(
+    server,
+    request
+) :: :ok
 ```
 
 #### GenServer.reply
-```elixir
-GenServer
-    reply(pid, term) 
-        :: :ok
-``` 
-Can be used instead of {:reply, _, _} inside `handle_call`.
+
+Can be used instead of {:reply, _, _} inside `handle_call`. 
+Can even be invoked from a different process.
 
 ```elixir
+reply(pid, term) :: :ok
+
 def handle_call(:reply_in_one_second, from, state) do
   Process.send_after(self(), {:reply, from}, 1_000)
   {:noreply, state}
@@ -58,15 +67,14 @@ def handle_info({:reply, from}, state) do
   {:noreply, state}
 end
 ```
-`GenServer.reply` can even be done from different process.
 
 #### GenServer.stop
 Synchronously stops server with given reason
 Normal reasons (no error logged): 
-    `:normal
-    | :shutdown
-    | {:shutdown, term}`
+```elixir
+:normal | :shutdown | {:shutdown, term}
 ```
+```elixir
 GenServer
     stop(
         server, 
@@ -76,14 +84,13 @@ GenServer
 ```
 
 #### GenServer timeout mechanism:
-:timeout message will be sent if no handle_* is invoked 
+`:timeout` message will be sent if no handle_* is invoked 
 in timeout msecs.
 
 Setup: add timeout option to:
 ``` elixir
 GenServer
-    init
-        {:ok, _, timeout}
+    init :: {:ok, _, timeout}
 GenServer
     handle_* :: {_, _, timeout}
 
@@ -94,36 +101,6 @@ GenServer
 
 Because a message may arrive before the timeout is set, even a timeout of 0 milliseconds is not guaranteed to execute. 
 To take another action immediately and unconditionally, use a `:continue` instruction + `handle_continue` callback.
-
-#### GenServer.handle_continue
-**Asynchronous initialization can cause a race condition:**
-https://medium.com/@tylerpachal/introduction-to-handle-continue-in-elixir-and-when-to-use-it-53ba5519cc17
-
-``` elixir
-GenServer
-    init
-        {:ok, state, {:continue, :more_init}}
-
-GenServer
-    handle_call(:work, _, state)
-        :: {
-            :reply, 
-            _, 
-            state, 
-            {:continue, :more_work}
-        }
-end
-
-GenServer
-    handle_continue(:more_init, state)
-        :: {:noreply, new_state}
-```
-
-handle_continue doesn't block caller process, 
-and also ensures nothing gets in front of it in a GenServer's mailbox.
-
-`handle_call` + `handle_continue` = respond + immediate handle_info.
-`init` + `handle_continue` = init + immediate handle_info.
 
 ### Callbacks
 `:reply, :noreply, :stop, :continue` are **instructions**
@@ -163,6 +140,9 @@ handle_call(
     }
     | {:stop, reason, reply, new_state}
     | {:stop, reason, new_state}
+
+# Invoked to handle synchronous call/3 messages. 
+# call/3 will block until a reply is received, or call times out.
 ```
 #### handle: cast
 Invoked to handle asynchronous cast/2 messages.
@@ -192,7 +172,36 @@ handle_continue(
     state :: term()
 ) :: return_same_as_handle_cast()
 ```
-### handle: terminate
+
+Example of using `:continue` for additional work during init:
+``` elixir
+GenServer
+    init
+        :: {:ok, state, {:continue, :more_init}}
+
+GenServer
+    handle_call(:work, _, state)
+        :: {
+            :reply, 
+            _, 
+            state, 
+            {:continue, :more_work}
+        }
+end
+
+GenServer
+    handle_continue(:more_init, state)
+        :: {:noreply, new_state}
+```
+
+`handle_continue` doesn't block caller process, 
+and also ensures nothing gets in front of it in a GenServer's mailbox.
+
+`handle_call` + `handle_continue` = respond + immediate handle_info.
+`init` + `handle_continue` = init + immediate handle_info.
+
+
+#### handle: terminate
 Invoked when the server is about to exit. It should do any cleanup required.
 ```elixir
 terminate(reason, state :: term()) 
@@ -222,17 +231,18 @@ So it's not reliable...
 Important clean-up rules belong in separate processes either by use of `monitoring` or by `link + trap_exit` (as in Supervisors)
 
 ### Process monitoring
-``` elixir
-Process
-    monitor
 
-GenServer
-    handle_info({:DOWN})
+Monitoring, unlike linking is one-way. Monitored process is not affected by monitoring process failure.
+
+``` elixir
+ref = Process.monitor(pid)
+
+# monitored process failure is handled in monitoring process:
+handle_info({:DOWN, ref, :process, object, reason})
 ```
 
-```console
-2nd parameter is timeout
-
+### Debugging processes with the :sys module
+```elixir
 :sys.get_state/2
 :sys.get_status/2 - see :sys.process_status section
 :sys.statistics/3 - see :sys.statistics section
@@ -240,10 +250,12 @@ GenServer
 
 :sys.suspend/2 
 :sys.resume/2
+
+# 2nd parameter is timeout
 ```
 
-### :sys.process_status
-```console
+#### :sys.process_status
+```elixir
 {:status, #PID<0.127.0>, {:module, :gen_server},
  [
    [
@@ -265,8 +277,8 @@ GenServer
  ]}
 ```
 
-### Process statistics using :sys.statistics
-```console
+#### :sys.statistics
+```elixir
 {:ok, pid} = Agent.start_link(fn -> 1 end)
 Agent.update(pid, fn state -> state + 1 end)
 :sys.statistics pid, :get
