@@ -89,7 +89,7 @@ Options = [spawn_opt_option()]
 priority_level() = low | normal | high | max
 max_heap_size() =
     integer() >= 0 |
-    #{size => integer() >= 0,
+    {size => integer() >= 0,
       kill => boolean(),
       error_logger => boolean()}
 message_queue_data() = off_heap | on_heap
