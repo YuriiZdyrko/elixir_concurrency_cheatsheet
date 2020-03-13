@@ -8,7 +8,7 @@ Use `Task.async_stream` instead if both conditions are true:
 - list to be processed is already in memory
 - **back-pressure** is not needed
 
-**Concurrency** in GenStage pipeline is achieved by having multiple Consumers for same Producer.
+**Concurrency** in GenStage pipeline is achieved by having multiple Consumers for same Producer. Adding more Consumers allows to max out CPU and IO usage as necessary.
 
 Producer implements **back-pressure** mechanism:
  - has it's own **demand** (sum of Consumers' demands)
@@ -31,7 +31,7 @@ Possible Consumer actions:
 # Events flow downstream, demand upstream.
  --- EVENTS --->
 [A] -> [B] -> [C]
- <--- DEMAND ---
+ <--- DEMAND ---  
 ```
 
 ```elixir
@@ -290,4 +290,113 @@ QueueBroadcaster.sync_notify(:hello_world)
 
 # With [buffered demand] and [not empty queue],
 # => QueueBroadcaster dispatches event to each Printer
+```
+
+### Asynchronous work and handle_subscribe
+
+Consumer and ProducerConsumer first `handle_events/3`, and then send **demand** upstream. This means demand is sent synchronously by default.
+There are two options to send demand asynchronously:
+
+1. Manual:
+- implement the `handle_subscribe/4` callback and return `{:manual, state}` instead of the default `{:automatic, state}`, 
+- use `GenStage.ask/3` to send demand upstream when necessary. `:max_demand` and `:min_demand` should be manually respected.
+
+2. Using ConsumerSupervisor:
+ConsumerSupervisor module processes events asynchronously by starting a process for each event and this is achieved by manually sending demand to producers.
+
+### Back-pressure
+
+`handle_subscribe/4` + `manual` is also useful for implementing custom **back-pressure** mechanisms.
+
+#### Default back-pressure mechanism
+When data is sent between stages, it is done by a message protocol that provides back-pressure. The first step is for the consumer to subscribe to the producer. Each subscription has a unique reference.
+
+Once subscribed, the consumer may ask the producer for messages for the given subscription. The consumer may demand more items whenever it wants to. A consumer must never receive more data than it has asked for from any given producer stage.
+
+A consumer may have multiple producers, where each demand is managed individually (on a per-subscription basis). A producer may have multiple consumers, where the demand and events are managed and delivered according to a GenStage.Dispatcher implementation.
+
+#### Example of custom back-pressure mechanism
+Implement a consumer that is allowed to process a limited number of events per time interval:
+
+```elixir
+defmodule RateLimiter do
+  @moduledoc """
+  The trick is - Consumer manages Producers' pending demand, 
+  instead of Producers doing this.
+  """
+  use GenStage
+
+  def init(_) do
+    # Our state will keep all producers and their pending demand
+    {:consumer, %{}}
+  end
+
+  @doc """
+  from() :: {pid(), subscription_tag()}
+  The term that identifies a subscription associated with the corresponding producer/consumer.
+  """
+  def handle_subscribe(:producer, opts, from, _state = producers) do
+    # We will only allow max_demand events every 5000 milliseconds
+    pending = opts[:max_demand] || 1000
+    interval = opts[:interval] || 5000
+
+    # Register the producer in the state
+    producers = Map.put(producers, from, {pending, interval})
+    # Ask for the pending events and schedule the next time around
+    producers = ask_and_schedule(producers, from)
+
+    # Returns manual as we want control over the demand
+    {:manual, producers}
+  end
+
+  def handle_cancel(_, from, producers) do
+    # Remove the producers from the map on unsubscribe
+    {:noreply, [], Map.delete(producers, from)}
+  end
+
+  def handle_events(events, from, producers) do
+    # Bump the amount of pending events for the given producer
+    producers = Map.update!(
+      producers, 
+      from, 
+      fn {pending, interval} ->
+        {pending + length(events), interval}
+      end
+    )
+
+    # Consume the events by printing them.
+    Process.sleep(:rand.uniform(10_000)) # simulate actual work
+    IO.inspect(events)
+
+    # A producer_consumer would return the processed events here.
+    {:noreply, [], producers}
+  end
+
+  def handle_info({:ask, from}, producers) do
+    # This callback is invoked by the Process.send_after/3 message below.
+    {:noreply, [], ask_and_schedule(producers, from)}
+  end
+
+  defp ask_and_schedule(producers, from) do
+    case producers do
+      %{^from => {pending, interval}} ->
+        # Ask for any pending events
+        GenStage.ask(from, pending)
+        # And let's check again after interval
+        Process.send_after(self(), {:ask, from}, interval)
+        # Finally, reset pending events to 0
+        Map.put(producers, from, {0, interval})
+      %{} ->
+        producers
+    end
+  end
+end
+```
+
+```elixir
+{:ok, a} = GenStage.start_link(A, 0)
+{:ok, b} = GenStage.start_link(RateLimiter, :ok)
+
+# Ask for 10 items every 2 seconds
+GenStage.sync_subscribe(b, to: a, max_demand: 10, interval: 2000)
 ```
