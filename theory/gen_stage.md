@@ -309,11 +309,11 @@ ConsumerSupervisor module processes events asynchronously by starting a process 
 `handle_subscribe/4` + `manual` is also useful for implementing custom **back-pressure** mechanisms.
 
 #### Default back-pressure mechanism
-When data is sent between stages, it is done by a message protocol that provides back-pressure. The first step is for the consumer to subscribe to the producer. Each subscription has a unique reference.
+When data is sent between stages, it is done by a message protocol that provides back-pressure. - consumer subscribes to the producer. Each subscription has a unique reference.
+- once subscribed, consumer may ask the producer for messages for the given subscription. A consumer must never receive more data than it has asked from a Producer.
 
-Once subscribed, the consumer may ask the producer for messages for the given subscription. The consumer may demand more items whenever it wants to. A consumer must never receive more data than it has asked for from any given producer stage.
-
-A consumer may have multiple producers, where each demand is managed individually (on a per-subscription basis). A producer may have multiple consumers, where the demand and events are managed and delivered according to a GenStage.Dispatcher implementation.
+A producer may have multiple consumers, where the demand and events are managed and delivered according to a GenStage.Dispatcher implementation.
+A consumer may have multiple producers, where each demand is managed individually (on a per-subscription basis). See example below:
 
 #### Example of custom back-pressure mechanism
 Implement a consumer that is allowed to process a limited number of events per time interval:
@@ -323,6 +323,7 @@ defmodule RateLimiter do
   @moduledoc """
   The trick is - Consumer manages Producers' pending demand, 
   instead of Producers doing this.
+  It's done by storing 
   """
   use GenStage
 
