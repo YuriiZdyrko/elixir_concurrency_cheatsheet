@@ -1,6 +1,6 @@
 ### Project description
 
-It's hard to interlalize documentation, this is my first attempt to do it.
+I wanted to have more readable and printable version of Elixir docs.
 
 This is detailed, but distilled version of docs: 
 - Elixir:Processes & Applications

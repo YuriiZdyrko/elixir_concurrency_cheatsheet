@@ -33,7 +33,7 @@ defmodule Practice.ConcatMd do
       :ok =
         File.open(dest, [:append])
         |> elem(1)
-        |> IO.binwrite("## #{i + 1}." <> next_chunk)
+        |> IO.binwrite("# #{i + 1}." <> next_chunk)
 
       File.close(dest)
     end)

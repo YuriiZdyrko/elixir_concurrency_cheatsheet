@@ -750,24 +750,37 @@ from_enumerable(Enumerable.t(), producer_opts())
 ```
 
 #### stream() (higher level function)
+Creates a stream that subscribes to the given producers and emits the appropriate messages.
+
 ```elixir
+producers() :: [
+  producer 
+  | {producer | subscription_options()}
+]
+
+opts() :: 
+  demand: \\ :forward
+  producers: \\ producers()
+  # If some of producers() are :producer_consumers,
+  # pass here only actual producers.
+
+stream(
+  producers(),
+  opts()
+) :: Enumerable.t()
+
+=> GenStage.stream([{producer, max_demand: 100}])
 ```
 
-<!-- ask/3 -->
-<!-- async_info/2 -->
-<!-- async_resubscribe/4 -->
-<!-- async_subscribe/2 -->
-<!-- call/3 -->
-<!-- cancel/3 -->
-<!-- cast/2 -->
-<!-- demand/1 -->
-<!-- demand/2 -->
-from_enumerable/2
-<!-- reply/2 -->
-<!-- start/3 -->
-<!-- start_link/3 -->
- <!-- stop/3 -->
-stream/2
-<!-- sync_info/3 -->
-<!-- sync_resubscribe/5 -->
-<!-- sync_subscribe/3 -->
+If the producer process exits, the stream will exit with the same reason. To halt stream instead, set the cancel option to either `:transient` or `:temporary` as described in `subscription_options().t`:
+```elixir
+GenStage.stream([{
+    producer, 
+    max_demand: 100,
+    cancel: :transient
+}])
+
+Once all producers are subscribed to, their demand is automatically set to :forward mode.
+
+`GenStage.stream/1` will "hijack" the inbox of the process enumerating the stream to subscribe and receive messages from producers.
+```

@@ -1,4 +1,4 @@
-## 1. Process
+# 1. Process
 
 #### Functions
 ```elixir
@@ -101,7 +101,7 @@ spawn_opt_option() =
     {message_queue_data, MQD :: message_queue_data()}
 ```
 ******
-## 2. GenServer
+# 2. GenServer
 
 used for:
 - mutable state (by abstracting receive loop)
@@ -402,7 +402,7 @@ Agent.update(pid, fn state -> state + 1 end)
  ]}
 ```
 ******
-## 3. Supervisor
+# 3. Supervisor
 
 Supervisor = Child specification + Supervision options
 
@@ -589,7 +589,7 @@ delete_child(
 ```
 
 ******
-## 4. DynamicSupervisor
+# 4. DynamicSupervisor
 
 DynamicSupervisor is started without Child Specification.
 Children are started on-demand.
@@ -694,7 +694,7 @@ which_children(supervisor())
 
 TODO: fix elixir docs to show correct return values for DynamicSupervisor.start_child
 ******
-## 5. Registry
+# 5. Registry
 
 A local, decentralized and scalable key-value process storage.
 It allows developers to lookup one or more processes with a given key.
@@ -837,7 +837,7 @@ put_meta(registry, key, value)
 ```
 
 ******
-## 6. Task
+# 6. Task
 
 Execute function in a new process, monitored by, or linked to a caller.
 
@@ -887,7 +887,7 @@ end
 ```
 
 ******
-## 7. Task.Supervisor
+# 7. Task.Supervisor
 
 Dynamically spawn and supervise tasks.
 Started with no children.
@@ -1057,7 +1057,7 @@ Failure in Task doesn't bring caller down, but results in {:exit, error} enumber
 
 
 ******
-## 8. GenStage
+# 8. GenStage
 
 Stages are used for:
 - provide **back-pressure**
@@ -1809,29 +1809,42 @@ from_enumerable(Enumerable.t(), producer_opts())
 ```
 
 #### stream() (higher level function)
+Creates a stream that subscribes to the given producers and emits the appropriate messages.
+
 ```elixir
+producers() :: [
+  producer 
+  | {producer | subscription_options()}
+]
+
+opts() :: 
+  demand: \\ :forward
+  producers: \\ producers()
+  # If some of producers() are :producer_consumers,
+  # pass here only actual producers.
+
+stream(
+  producers(),
+  opts()
+) :: Enumerable.t()
+
+=> GenStage.stream([{producer, max_demand: 100}])
 ```
 
-<!-- ask/3 -->
-<!-- async_info/2 -->
-<!-- async_resubscribe/4 -->
-<!-- async_subscribe/2 -->
-<!-- call/3 -->
-<!-- cancel/3 -->
-<!-- cast/2 -->
-<!-- demand/1 -->
-<!-- demand/2 -->
-from_enumerable/2
-<!-- reply/2 -->
-<!-- start/3 -->
-<!-- start_link/3 -->
- <!-- stop/3 -->
-stream/2
-<!-- sync_info/3 -->
-<!-- sync_resubscribe/5 -->
-<!-- sync_subscribe/3 -->
+If the producer process exits, the stream will exit with the same reason. To halt stream instead, set the cancel option to either `:transient` or `:temporary` as described in `subscription_options().t`:
+```elixir
+GenStage.stream([{
+    producer, 
+    max_demand: 100,
+    cancel: :transient
+}])
+
+Once all producers are subscribed to, their demand is automatically set to :forward mode.
+
+`GenStage.stream/1` will "hijack" the inbox of the process enumerating the stream to subscribe and receive messages from producers.
+```
 ******
-## 9. Application configuration
+# 9. Application configuration
 
 ```elixir
 # config.exs
@@ -1950,7 +1963,7 @@ read_imports!(file, imported_paths \\ [])
 # Reads configuration file and it's imports.
 ```
 ******
-## 10. Mix release
+# 10. Mix release
 
 Assembles a self-contained release for the current project.
 Benefits:
