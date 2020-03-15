@@ -16,6 +16,9 @@ https://medium.com/@StevenLeiva1/elixir-process-registries-a27f813d94e3
 
 ### GenStage
 
+#1 Fun article
+https://blog.echobind.com/how-genstage-kept-medical-records-current-6140ee1e0d63
+
 https://medium.com/@andreichernykh/elixir-a-few-things-about-genstage-id-wish-to-knew-some-time-ago-b826ca7d48ba
 
 https://stackoverflow.com/questions/52968929/runtime-dynamic-compute-graph-using-elixir-genstages

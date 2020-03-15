@@ -16,6 +16,17 @@ Producer implements **back-pressure** mechanism:
 
 Consumer <-> Producer is a **many-to-many** relationship.
 
+#### Protocol details:
+1. Consumers send to Producers:
+- start subscription
+- cancel subscription
+- send demand for a given subscription
+
+2. Producers send to Consumers:
+- cancel subscription
+  (used as confirmation of clients cancellations, or to cancel upstream demand)
+- send events to given subscription
+
 Consumer max and min demand is often set on subscription:
 - `:max_demand` - max amount of events that must be in flow 
 - `:min_demand` - minimum threshold to trigger for more demand. 
@@ -27,11 +38,11 @@ Possible Consumer actions:
 - receive 1000 events
 - process at least 250 events
 - ask for more events
+
 ```
-# Events flow downstream, demand upstream.
- --- EVENTS --->
-[A] -> [B] -> [C]
- <--- DEMAND ---  
+ --- EVENTS (downstream) --->
+  [A]  --->  [B]  ---> [C]
+ <--- DEMAND (upstream) ---  
 ```
 
 ```elixir
@@ -322,8 +333,20 @@ Implement a consumer that is allowed to process a limited number of events per t
 defmodule RateLimiter do
   @moduledoc """
   The trick is - Consumer manages Producers' pending demand, 
-  instead of Producers doing this.
-  It's done by storing 
+  instead of Producer doing this.
+  There are 2 main pieces of puzzle:
+  
+  1. ask_and_schedule calls itself recursively with an interval:
+    - GenStage.ask(from, pending) 
+      -> trigger handle_events
+    - resets pending to 0, which results in possible GenStage.ask(from, 0) repeated calls,
+      but it's harmless, as handle_demand(0) is ignored by Producers.
+    
+  2. handle_events (triggered by GenStage.ask(from, pending))
+    - gets new events
+    - processes them
+    - sets pending to length(events) 
+      -> thanks to this ask_and_schedule will repeat 1-2 cycle
   """
   use GenStage
 
@@ -400,4 +423,142 @@ end
 
 # Ask for 10 items every 2 seconds
 GenStage.sync_subscribe(b, to: a, max_demand: 10, interval: 2000)
+```
+
+### Functions
+
+#### TODO: Group methods by meaning
+
+#### Init
+
+### Callbacks
+
+Define/override child_spec:
+```elixir
+use GenStage, 
+  restart: :transient, 
+  shutdown: 10_000
+```
+Required callbacks:
+`init/1` - choice between `:producer`, `:consumer`, `:producer_consumer` stages
+`handle_demand/2` - `:producer` stage
+`handle_events/3` - `:producer_consumer`, `:consumer` stages
+
+```elixir
+init(args) ::
+  {:producer, state}
+  | {:producer, state, [producer_option()]}
+  | {:producer_consumer, state}
+  | {:producer_consumer, state, [producer_consumer_option()]}
+  | {:consumer, state}
+  | {:consumer, state, [consumer_option()]}
+  | :ignore
+  | {:stop, reason :: any()}
+```
+```elixir
+:init/1 options
+
+:producer
+  demand:
+    :forward (default)
+    # forward demand to the `handle_demand/2` callback. 
+    
+    :accumulate
+    # accumulate demand until its mode 
+    # is set to :forward via demand/2
+
+# :accumulate is useful as a synchronization mechanism, 
+# where the demand is accumulated until all consumers are subscribed. 
+
+:producer and :producer_consumer
+  :buffer_size
+    10_000 (:producer default)
+    :infinity (:producer_consumer default)
+    # The size of the buffer to store events without demand.
+
+  :buffer_keep \\ :last
+    # whether the :first or :last entries should stay in buffer 
+    # if :buffer_size is exceeded
+
+  :dispatcher \\ GenStage.DemandDispatch
+    DispatcherModule
+    | {DispatcherModule, options}
+    # the dispatcher responsible for handling demand
+
+:consumer and :producer_consumer
+  :subscribe_to
+    [ProducerModule]
+    | [{ProducerModule, options}]
+```
+
+```elixir
+handle_call(request, from, state) ::
+  {:reply, reply, [event], new_state}
+  | {:noreply, [event], new_state}
+  | {:stop, reason, reply, new_state}
+  | {:stop, reason, new_state}
+
+  {:reply, reply, [events], new_state}
+    -> dispatch events (or buffer)
+    -> send the response reply to caller
+    -> continue loop with new state
+  {:noreply, [event], state}
+    -> dispatch events (or buffer)
+    -> continue loop with new state
+    -> manually send response with `GenStage.reply`
+  {:stop, reason, new_state}
+    -> stop the loop
+    -> terminate is called with a reason and new_state
+```
+
+```elixir
+handle_cast(request, state) ::
+handle_info(message, state) ::
+
+# required for :producer stage 
+handle_demand(demand :: pos_integer(), state) ::
+
+# required for :producer_consumer and :consumer stages
+handle_events(events :: [event], from(), state) ::
+
+  {:noreply, [event], new_state}
+  | {:stop, reason, new_state}
+  
+  # {:noreply, [event], new_state}
+  # -> dispatch or buffer events
+  # -> continue loop with new state
+```
+
+```elixir
+# Invoked in both producers and consumers when consumer subscribes to producer.
+
+handle_subscribe(
+  producer_or_consumer :: :producer | :consumer,
+  subscription_options(),
+  from(),
+  state :: term()
+) :: 
+  {:automatic | :manual, new_state} 
+  | {:stop, reason, new_state}
+
+  {:automatic, new_state} (default)
+    -> demand is sent automatically to producer
+
+  {:manual, new_state}
+    -> supported only by Consumers!
+    -> send demand via ask(subscription_options(), demand)
+```
+
+```elixir
+handle_cancel(
+  cancellation_reason :: {
+    :cancel # cancellation from GenStage.cancel/2 call
+    | :down, # cancellation from an EXIT
+    reason
+  },
+  from(),
+  state
+) ::
+  {:noreply, [], new_state} \\ default
+  | handle_cast_returns
 ```

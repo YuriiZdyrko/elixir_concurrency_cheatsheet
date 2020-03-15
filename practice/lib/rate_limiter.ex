@@ -70,7 +70,8 @@ defmodule RateLimiter do
   instead of Producers doing this.
   It's done by keeping Producers' demand inside Consumers state.
 
-  Nothing interesting here.
+  There's nothing interesting here.
+  Just a lot of trial and errors.
   """
   use GenStage
   import IEx
