@@ -360,7 +360,8 @@ defmodule RateLimiter do
 
   @doc """
   from() :: {pid(), subscription_tag()}
-  The term that identifies a subscription associated with the corresponding producer/consumer.
+  The term that identifies a subscription associated with the corresponding
+  producer/consumer.
   """
   def handle_subscribe(:producer, opts, from, _state = producers) do
     # We will only allow max_demand events every 5000 milliseconds
@@ -684,8 +685,10 @@ Cancels the given subscription on the producer.
 Same args/return as `Process.send(dest, msg, opts)`.
 
 cancel(from(), reason, opts \\ []) :: :ok
-# Consumer will react according to the :cancel option given when subscribing, for example:
-reason(:shutdown) + consumer(:permanent) = crash!
+
+# Consumer will react according to the :cancel option,
+#  given when subscribing, for example:
+reason(:shutdown) + consumer(:permanent) = crash
 ```
 
 #### info()
@@ -779,8 +782,7 @@ GenStage.stream([{
     max_demand: 100,
     cancel: :transient
 }])
-
+```
 Once all producers are subscribed to, their demand is automatically set to :forward mode.
 
 `GenStage.stream/1` will "hijack" the inbox of the process enumerating the stream to subscribe and receive messages from producers.
-```

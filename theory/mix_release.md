@@ -52,11 +52,14 @@ end
 
 application_option() \\ :permanent
   :permanent
-  # application is started and the node shuts down if the application terminates, regardless of reason
+  # application is started and the node shuts down 
+  # if the application terminates, regardless of reason
   :transient 
-  # application is started and the node shuts down if the application terminates abnormally
+  # application is started and the node shuts down 
+  # if the application terminates abnormally
   :temporary
-  # application is started and the node does not shut down if the application terminates
+  # application is started and the node does not shut down 
+  # if the application terminates
   :load 
   # the application is only loaded
   :none
@@ -178,6 +181,7 @@ rpc "EXPR"     Executes the given expression remotely on the running system
 remote         Connects to the running system via a remote shell
 restart        Restarts the running system via a remote command
 stop           Stops the running system via a remote command
-pid            Prints the operating system PID of the running system via a remote command
+pid            Prints the operating system PID
+               of the running system via a remote command
 version        Prints the release name and version to be booted
 ```
