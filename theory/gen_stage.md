@@ -16,7 +16,7 @@ Producer implements **back-pressure** mechanism:
 
 Consumer <-> Producer is a **many-to-many** relationship.
 
-#### Protocol details:
+#### Protocol details
 1. Consumers send to Producers:
 - start subscription
 - cancel subscription
@@ -27,23 +27,25 @@ Consumer <-> Producer is a **many-to-many** relationship.
   (used as confirmation of clients cancellations, or to cancel upstream demand)
 - send events to given subscription
 
+#### Protocol visualization
+```
+ --- EVENTS (downstream) --->
+  [A]  --->  [B]  ---> [C]
+ <--- DEMAND (upstream) ---  
+```
+
 Consumer max and min demand is often set on subscription:
 - `:max_demand` - max amount of events that must be in flow 
 - `:min_demand` - minimum threshold to trigger for more demand. 
- 
-#### Example: 
+
 `:max_demand` = 1000, `:min_demand` = 750. 
 Possible Consumer actions:
 - demand 1000 events
 - receive 1000 events
 - process at least 250 events
 - ask for more events
-
-```
- --- EVENTS (downstream) --->
-  [A]  --->  [B]  ---> [C]
- <--- DEMAND (upstream) ---  
-```
+ 
+#### Simple Example
 
 ```elixir
 defmodule A do
@@ -125,7 +127,7 @@ defmodule C do
 end
 ```
 
-#### Subscription
+#### Subscription :manual vs :automatic
 
 1. Manual subscription (no Supervision)
 ```elixir
@@ -159,19 +161,20 @@ children = [
 Supervisor.start_link(children, strategy: :rest_for_one)
 ```
 
-#### Buffering
+### Buffering
 
 1. Buffering events.
-=> Buffer events until a consumer is available.
-Use `:buffer_size \\ 10_000` option in Producer `init` callback.
+=> Buffer sent, but not delivered to consumers events until a consumer is available.
+To control buffer size, use `:buffer_size \\ 10_000` option in Producer `init` callback.
+(potential :buffer_size error)
 
 2. Buffering demand.
 Consumers ask producers for events that are not yet available
-=> buffer the consumer demand until events arrive
+=> buffer the consumer demand until events arrive 
+(not a problem)
 
 
-### Example of manual control over dispatch
-
+#### Example of manual control over events buffer in Producer
 If events are sent without corresponding demand, they will wait in Producer's internal buffer. 
 By default max size of internal buffer is 10_000, and `:buffer_size` error is thrown if it's exceeded.
 
@@ -326,7 +329,7 @@ When data is sent between stages, it is done by a message protocol that provides
 A producer may have multiple consumers, where the demand and events are managed and delivered according to a GenStage.Dispatcher implementation.
 A consumer may have multiple producers, where each demand is managed individually (on a per-subscription basis). See example below:
 
-#### Example of custom back-pressure mechanism
+#### Example of custom back-pressure mechanism in Consumer
 Implement a consumer that is allowed to process a limited number of events per time interval:
 
 ```elixir
@@ -438,6 +441,7 @@ Required callbacks:
 `handle_demand/2` - `:producer` stage
 `handle_events/3` - `:producer_consumer`, `:consumer` stages
 
+#### init
 ```elixir
 init(args) ::
   {:producer, state}
@@ -484,6 +488,7 @@ init(args) ::
     | [{ProducerModule, [subscription_options()]}]
 ```
 
+#### handle_call
 ```elixir
 handle_call(request, from, state) ::
   {:reply, reply, [event], new_state}
@@ -504,6 +509,7 @@ handle_call(request, from, state) ::
     -> terminate is called with a reason and new_state
 ```
 
+#### handle_cast, handle_info, handle_demand, handle_events
 ```elixir
 handle_cast(request, state) ::
 handle_info(message, state) ::
@@ -522,9 +528,9 @@ handle_events(events :: [event], from(), state) ::
   # -> continue loop with new state
 ```
 
+#### handle_subscribe
+Invoked in both producers and consumers when consumer subscribes to producer.
 ```elixir
-# Invoked in both producers and consumers when consumer subscribes to producer.
-
 handle_subscribe(
   producer_or_consumer :: :producer | :consumer,
   subscription_options(),
@@ -542,6 +548,8 @@ handle_subscribe(
   # demand must be sent via ask(from(), demand)
 ```
 
+#### handle_cancel
+Invoked when a consumer is no longer subscribed to a producer.
 ```elixir
 handle_cancel(
   cancellation_reason :: {
@@ -557,21 +565,26 @@ handle_cancel(
 ```
 
 ### Types
+#### stage().t
+Stage registered name or pid
 ```elixir
-# Stage registered name or pid
 stage() ::
   pid()
   | atom()
   | {:global, term()}
   | {:via, module(), term()}
   | {atom(), node()}
-
-# Producer subscription identifier
+```
+#### from().t
+Producer subscription identifier
+```elixir
 from() :: 
   {pid(), subscription_tag()}
 # Can be obtained in handle_subscribe/4, and stored in stage's state.
-
-# Option used by the subscribe* functions
+```
+#### subscription_options().t
+Option used by the subscribe* functions
+```elixir
 subscription_options() ::
   min_demand:
   max_demand:
@@ -613,12 +626,12 @@ Usually done from `init`, by use of `subscribe_to` option.
 As a result of subscription, `subscription_tag()` is passed to consumer's `handle_subscribe/4` callback.
 
 `resubscribe` cancels subscription with given reason, 
-can be used to update `subscription_opts`.
+can be used to update `subscription_options`.
 
 ```elixir
 subscribe_args :: 
   stage, 
-  subscription_opts
+  subscription_options()
 
 sync_returns ::
   {:ok, subscription_tag()}
@@ -637,7 +650,7 @@ resubscribe_args ::
   stage,
   subscription_tag(),
   reason,
-  subscription_opts
+  subscription_options
 
 async_resubscribe(...resubscribe_args) 
   :: :ok
@@ -655,11 +668,9 @@ demand(stage, :forward | :accumulate) :: :ok
 # Sets producer's demand
 ```
 
-#### ask(), cancel()
-Both methods have same args/return as `Process.send(dest, msg, opts)`.
-
 #### ask()
 Asks the given demand to the producer.
+Same args/return as `Process.send(dest, msg, opts)`.
 
 ```elixir
 ask(from(), demand, opts \\ []) :: :ok
@@ -669,6 +680,9 @@ ask(from(), demand, opts \\ []) :: :ok
 
 #### cancel()
 ```elixir
+Cancels the given subscription on the producer.
+Same args/return as `Process.send(dest, msg, opts)`.
+
 cancel(from(), reason, opts \\ []) :: :ok
 # Consumer will react according to the :cancel option given when subscribing, for example:
 reason(:shutdown) + consumer(:permanent) = crash!
@@ -688,11 +702,34 @@ sync_info(stage, msg, timeout \\ 5000) :: :ok
 ```
 
 #### from_enumerable() (higher level function)
-Starts a producer stage from an enumerable (or stream).
-This function will start a stage linked to the current process that will take items from the enumerable when there is demand. 
+Starts a producer stage (linked to current process) 
+from a stream (most common case) or other enumerable.
+Producer will take items from the enumerable when there is demand.
+
+The enumerable is consumed in batches, retrieving `max_demand` items the first time and then `max_demand - min_demand` the next times. 
+Therefore, for streams that cannot produce items that fast, it is recommended to pass a lower `:max_demand` option value.
+
+Enumerable should:
+-> block until the current batch is fully filled
+-> return batch or terminate
+
+
+When Enumerable finishes or halts,
+stage exits with normal reason, and consumer
+(**Possible duplicate info**):
+```elixir
+? consumer(cancel: :permanent)  (default)
+  -> consumer exits(:normal)
+? consumer(cancel: :transient) 
+  -> consumer exits(reason), only for error reasons
+? consumer(cancel: :temporary) 
+  -> consumer never exits
+```
+
+Resulting Producer can be used with GenStage or Flow (integrated by use of `Flow.from_stages/2`).
 
 ```elixir
-GenServer.on_start ::
+GenServer.on_start() ::
   {:ok, pid()} 
   | :ignore 
   | {:error, 
@@ -700,10 +737,16 @@ GenServer.on_start ::
     | term()
   }
 
-from_enumerable(
-  Enumerable.t(), 
-  keyword()
-) :: GenServer.on_start()
+producer_opts() ::
+  link: \\ true,
+  dispatcher: \\ GenStage.DemandDispatch
+    DispatcherModule
+    | {DispatcherModule, opts},
+  demand: :forward | :accumulate
+  ...all_start_link_options
+
+from_enumerable(Enumerable.t(), producer_opts())
+  :: GenServer.on_start()
 ```
 
 #### stream() (higher level function)

@@ -1,22 +1,26 @@
-### Project goal: learning to learn!
-#### It's hard to interlalize documentation, this is my first attempt to do it. Elixir documentation is great, but it's a tough read.
+### Project description
 
-#### Approach
-- simplify explanations by writing in own words
-- remove :hibernate/Distribution/Hot code reloading clutter
-- organize functions/callbacks logically
-- make small flow diagrams
-- try to focus on big picture, but not ignore anything relevant
-- for each OTP Behaviour, do: description->code examples->callbacks->functions
-- reduce duplication. For example GenStage has Reply same as GenServer. Just point to GenServer for details.
+It's hard to interlalize documentation, this is my first attempt to do it.
 
-This is detailed, but distilled version of Elixir->PROCESSES & APPLICATIONS documentation. 
+This is detailed, but distilled version of docs: 
+- Elixir:Processes & Applications
+- GenStage
+- mix release
 
-Cheatsheet covers most important OTP-compliant abstractions, as well as `mix release` command.
+### Approach
+- make explanations shorter
+- use pseudo-code instead of wordy explanations if possible
+- skip :hibernate/Distribution/Hot code reloading mentions for now
+- document callbacks/functions in a logical order
+- for each OTP Behaviour, cover in order: 
+    - description
+    - code examples
+    - callbacks
+    - functions
+- reduce duplication. For example GenStage has Reply same as GenServer. Just point to GenServer for details
 
-I omitted all things related to Distribution and Hot code upgrades.
-
-In case you want to generate your own `cheatsheet.md`:
+### Script to combine all files into `cheatsheet.md`
+To put all separate *.md files into single `cheatsheet.md`:
 ```sh
 cd "./practice" && iex -S mix
 iex> Practice.ConcatMd.run()
