@@ -425,12 +425,6 @@ end
 GenStage.sync_subscribe(b, to: a, max_demand: 10, interval: 2000)
 ```
 
-### Functions
-
-#### TODO: Group methods by meaning
-
-#### Init
-
 ### Callbacks
 
 Define/override child_spec:
@@ -461,11 +455,10 @@ init(args) ::
 :producer
   demand:
     :forward (default)
-    # forward demand to the `handle_demand/2` callback. 
+    # forward demand to the `handle_demand/2`
     
     :accumulate
-    # accumulate demand until its mode 
-    # is set to :forward via demand/2
+    # accumulate demand until set to :forward via demand/2
 
 # :accumulate is useful as a synchronization mechanism, 
 # where the demand is accumulated until all consumers are subscribed. 
@@ -488,7 +481,7 @@ init(args) ::
 :consumer and :producer_consumer
   :subscribe_to
     [ProducerModule]
-    | [{ProducerModule, options}]
+    | [{ProducerModule, [subscription_options()]}]
 ```
 
 ```elixir
@@ -541,12 +534,12 @@ handle_subscribe(
   {:automatic | :manual, new_state} 
   | {:stop, reason, new_state}
 
-  {:automatic, new_state} (default)
-    -> demand is sent automatically to producer
+  # {:automatic, new_state} (default)
+  # demand is sent automatically to producer
 
-  {:manual, new_state}
-    -> supported only by Consumers!
-    -> send demand via ask(subscription_options(), demand)
+  # {:manual, new_state}
+  # supported only by Consumers
+  # demand must be sent via ask(from(), demand)
 ```
 
 ```elixir
@@ -559,6 +552,179 @@ handle_cancel(
   from(),
   state
 ) ::
-  {:noreply, [], new_state} \\ default
+  {:noreply, [], new_state} (default)
   | handle_cast_returns
 ```
+
+### Types
+```elixir
+# Stage registered name or pid
+stage() ::
+  pid()
+  | atom()
+  | {:global, term()}
+  | {:via, module(), term()}
+  | {atom(), node()}
+
+# Producer subscription identifier
+from() :: 
+  {pid(), subscription_tag()}
+# Can be obtained in handle_subscribe/4, and stored in stage's state.
+
+# Option used by the subscribe* functions
+subscription_options() ::
+  min_demand:
+  max_demand:
+
+  cancel:
+    :permanent (default)
+    # consumer exits if the producer cancels subscription or exits
+    :transient
+    # consumer exits if reason not in
+    # [:normal, :shutdown, or {:shutdown, reason}]
+    :temporary
+    # consumer never exits
+
+  _: # any other option
+    # Example for GenStage.BroadcastDispatcher:
+    GenStage.sync_subscribe(
+        consumer,
+        to: producer,
+        selector: 
+          fn %{key: key} -> 
+            String.starts_with?(key, "foo-") 
+          end)
+    )
+```
+
+### Functions
+
+```elixir
+# Same as GenServer
+start_link(module, args, options \\ [])
+stop(stage, reason \\ :normal, timeout \\ :infinity)
+call(stage, request, timeout \\ 5000)
+cast(stage, request)
+reply(client, reply)
+```
+#### subscription()
+Subscribe consumer to the given producer.
+Usually done from `init`, by use of `subscribe_to` option.
+As a result of subscription, `subscription_tag()` is passed to consumer's `handle_subscribe/4` callback.
+
+`resubscribe` cancels subscription with given reason, 
+can be used to update `subscription_opts`.
+
+```elixir
+subscribe_args :: 
+  stage, 
+  subscription_opts
+
+sync_returns ::
+  {:ok, subscription_tag()}
+  | {:error, :not_a_consumer}
+  | {:error, {:bad_opts, String.t()}}
+
+async_subscribe(...subscribe_args) 
+  :: :ok
+# done automatically from `init` with `subscribe_to` option
+
+sync_subscribe(...subscribe_args, timeout) 
+  :: sync_returns
+# -> returns before consumer:handle_subscribe/4 is called
+
+resubscribe_args :: 
+  stage,
+  subscription_tag(),
+  reason,
+  subscription_opts
+
+async_resubscribe(...resubscribe_args) 
+  :: :ok
+
+sync_resubscribe(...resubscribe_args, timeout()) 
+  :: sync_returns
+```
+
+#### demand()
+```elixir
+demand(stage) :: :forward | :accumulate
+# Returns producer's demand
+
+demand(stage, :forward | :accumulate) :: :ok
+# Sets producer's demand
+```
+
+#### ask(), cancel()
+Both methods have same args/return as `Process.send(dest, msg, opts)`.
+
+#### ask()
+Asks the given demand to the producer.
+
+```elixir
+ask(from(), demand, opts \\ []) :: :ok
+# Can only be used if `handle_subscribe/4` returns `:manual`
+# if demand = 0, does nothing
+```
+
+#### cancel()
+```elixir
+cancel(from(), reason, opts \\ []) :: :ok
+# Consumer will react according to the :cancel option given when subscribing, for example:
+reason(:shutdown) + consumer(:permanent) = crash!
+```
+
+#### info()
+```elixir
+# info message, that is delivered to handle_info:
+# - for consumers: immediately
+# - for producers: queued after all currently buffered events 
+
+async_info(stage, msg) :: :ok
+# immediate return
+
+sync_info(stage, msg, timeout \\ 5000) :: :ok
+# return :ok after message has been queued
+```
+
+#### from_enumerable() (higher level function)
+Starts a producer stage from an enumerable (or stream).
+This function will start a stage linked to the current process that will take items from the enumerable when there is demand. 
+
+```elixir
+GenServer.on_start ::
+  {:ok, pid()} 
+  | :ignore 
+  | {:error, 
+    {:already_started, pid()} 
+    | term()
+  }
+
+from_enumerable(
+  Enumerable.t(), 
+  keyword()
+) :: GenServer.on_start()
+```
+
+#### stream() (higher level function)
+```elixir
+```
+
+<!-- ask/3 -->
+<!-- async_info/2 -->
+<!-- async_resubscribe/4 -->
+<!-- async_subscribe/2 -->
+<!-- call/3 -->
+<!-- cancel/3 -->
+<!-- cast/2 -->
+<!-- demand/1 -->
+<!-- demand/2 -->
+from_enumerable/2
+<!-- reply/2 -->
+<!-- start/3 -->
+<!-- start_link/3 -->
+ <!-- stop/3 -->
+stream/2
+<!-- sync_info/3 -->
+<!-- sync_resubscribe/5 -->
+<!-- sync_subscribe/3 -->
