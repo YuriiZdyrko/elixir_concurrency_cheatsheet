@@ -2,12 +2,13 @@
 
 Dynamically spawn and supervise tasks.
 Started with no children.
-
+```elixir
 [your code] -- calls --> [supervisor] ---- spawns --> [task]
 
 [your code]              [supervisor] <-- ancestor -- [task]
     ^                                                  |
     |--------------------- caller ---------------------|
+```
 
 ```elixir
 # Short example

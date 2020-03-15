@@ -101,7 +101,7 @@ spawn_opt_option() =
     {message_queue_data, MQD :: message_queue_data()}
 ```
 ******
-# 2. GenServer
+# 2. GenServer behaviour
 
 used for:
 - mutable state (by abstracting receive loop)
@@ -402,7 +402,7 @@ Agent.update(pid, fn state -> state + 1 end)
  ]}
 ```
 ******
-# 3. Supervisor
+# 3. Supervisor behaviour
 
 Supervisor = Child specification + Supervision options
 
@@ -589,7 +589,7 @@ delete_child(
 ```
 
 ******
-# 4. DynamicSupervisor
+# 4. DynamicSupervisor behaviour
 
 DynamicSupervisor is started without Child Specification.
 Children are started on-demand.
@@ -891,12 +891,13 @@ end
 
 Dynamically spawn and supervise tasks.
 Started with no children.
-
+```elixir
 [your code] -- calls --> [supervisor] ---- spawns --> [task]
 
 [your code]              [supervisor] <-- ancestor -- [task]
     ^                                                  |
     |--------------------- caller ---------------------|
+```
 
 ```elixir
 # Short example
@@ -1844,7 +1845,218 @@ Once all producers are subscribed to, their demand is automatically set to :forw
 `GenStage.stream/1` will "hijack" the inbox of the process enumerating the stream to subscribe and receive messages from producers.
 ```
 ******
-# 9. Application configuration
+# 9. GenStage dispatchers
+
+### GenStage.Dispatcher behaviour
+This module defines the behaviour used by `:producer` and `:producer_consumer` to dispatch events.
+
+GenServer has three built-in implementations:
+`DemandDispatcher`, `BroadcastDispatcher`, `PartitionDispatcher`.
+
+Implementation is chosen in Producer:
+```elixir
+def init(:ok) do
+    {
+        :producer, 
+        state, 
+        dispatcher: 
+            GenStage.BroadcastDispatcher
+            | {GenStage.BroadcastDispatcher, dispatcher_options()}
+    }
+end
+```
+
+Callbacks:
+```elixir
+init(opts)
+subscribe(opts, from, state)
+ask(demand, from, state)
+dispatch(events, length, state)
+cancel(from, state)
+info(msg, state)
+```
+
+### GenStage.DemandDispatcher
+A dispatcher that sends batches to the highest demand.
+
+This is the default dispatcher used by GenStage. In order to avoid greedy consumers, it is recommended that all consumers have exactly the same maximum demand.
+
+### GenStage.BroadcastDispatcher
+
+A dispatcher that accumulates demand from all consumers before broadcasting events to all of them.
+It guarantees that events are dispatched to all consumers without exceeding the demand of any given consumer.
+
+Example with BroadcastDispatcher-specific `:selector` option:
+
+```elixir
+# Inside consumer's init/1
+{
+    :consumer, 
+    :ok, 
+    subscribe_to:
+        [{
+            producer, 
+            # Consumers receive events, filtered by selector
+            selector: fn %{key: key} -> 
+                String.starts_with?(key, "foo-") 
+            end
+        }]
+}
+end
+# or
+GenStage.sync_subscribe(
+    consumer,
+    to: producer,
+    selector: 
+        fn %{key: key} ->
+            String.starts_with?(key, "foo-") 
+        end
+)
+```
+
+### GenStage.PartitionDispatcher
+
+A dispatcher that sends events according to partitions.
+
+Keep in mind that, if partitions are not evenly distributed, a backed-up partition will slow all other ones.
+
+```elixir
+dispatcher_options() :: 
+    partitions :: integer or list
+    # 4 = partitions with keys 0, 1, 2, 3
+    # 0..3 = same
+
+    hash :: (event) => {event, partition_key}
+    # function to hash event
+    # example:
+```
+
+When subscribing to a GenStage with a partition dispatcher the `:partition` option is required.
+
+```elixir
+# Choose dispatcher inside producer's init/1
+{
+    :producer, 
+    state, 
+    dispatcher: {
+        GenStage.PartitionDispatcher, 
+        partitions: 0..3,
+        hash: fn event -> 
+            {
+                event, 
+                :erlang.phash2(
+                    event, 
+                    Enum.count(partitions)
+                )
+            }
+        end
+    }
+}
+
+# Inside consumer's init/1
+{
+    :consumer, 
+    :ok, 
+    subscribe_to: [{producer, partition: 0}]
+}
+# or
+GenStage.sync_subscribe(
+    consumer, 
+    to: producer, 
+    partition: 0
+)
+```
+******
+# 10. ConsumerSupervisor behaviour
+
+A supervisor that starts children as events flow in
+Can be used as the consumer in a GenStage pipeline.
+
+Can be attached to a producer by returning `:subscribe_to` from `init/1` or explicitly with `GenStage.sync_subscribe/3` and `GenStage.async_subscribe/2`.
+
+Once subscribed, the supervisor will:
+- ask the producer for `:max_demand events` 
+- start child processes per event as events arrive
+  (event is appended to the arguments in the child specification)
+- as child processes terminate, the supervisor will accumulate demand and request more events after `:min_demand` is reached
+
+ConsumerSupervisor is similar to a pool, except a child process is started per event. 
+`:min_demand` < `amount of concurrent children per producer` < `:max_demand`.
+
+### Example
+
+```elixir
+defmodule Consumer do
+  use ConsumerSupervisor
+
+  def start_link(arg) do
+    ConsumerSupervisor.start_link(__MODULE__, arg)
+  end
+
+  def init(_arg) do
+    # Note: By default child.restart = :permanent
+    # ConsumerSupervisor supports only :termporary or :transient
+    children = [%{
+        id: Printer, 
+        start: {Printer, :start_link, []}, 
+        restart: :transient
+    }]
+    opts = [
+        strategy: :one_for_one, 
+        subscribe_to: [{Producer, max_demand: 50}]
+    ]
+    ConsumerSupervisor.init(children, opts)
+  end
+end
+
+defmodule Printer do
+  def start_link(event) do
+    # Note: this function must:
+    # - return the format of {:ok, pid}
+    # - like all children started by a Supervisor, 
+    #   the process must be linked back to the supervisor
+    # Task.start_link/1 satisfies these requirements
+    Task.start_link(fn ->
+      IO.inspect({self(), event})
+    end)
+  end
+end
+```
+
+### Callbacks
+
+```elixir
+init_options() :: [
+    max_restarts \\ 3,
+    max_seconds \\ 5,
+    subscribe_to: 
+        [Producer]
+        | [{Producer, max_demand: 20, min_demand: 10}]
+        # [{Producer, subscription_options().t}]
+]
+
+init(args) ::
+  {:ok, [:supervisor.child_spec()], init_options()} 
+  | :ignore
+```
+
+### Functions
+
+```elixir
+# Supervisor
+init(children, init_options()) # For module based supervisor
+start_link(mod, args) # For module based supervisor
+start_link(children, init_options()) # For in-place supervisor
+
+# Children
+start_child(supervisor, child_args)
+terminate_child(supervisor, pid)
+count_children(supervisor)
+which_children(supervisor)
+```
+
+******
+# 11. Application configuration
 
 ```elixir
 # config.exs
@@ -1963,7 +2175,7 @@ read_imports!(file, imported_paths \\ [])
 # Reads configuration file and it's imports.
 ```
 ******
-# 10. Mix release
+# 12. Mix release
 
 Assembles a self-contained release for the current project.
 Benefits:

@@ -1,4 +1,4 @@
-## DynamicSupervisor
+## DynamicSupervisor behaviour
 
 DynamicSupervisor is started without Child Specification.
 Children are started on-demand.

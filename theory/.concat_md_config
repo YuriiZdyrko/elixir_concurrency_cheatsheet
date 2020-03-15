@@ -6,5 +6,7 @@ registry
 task
 task_supervisor
 gen_stage
+gen_stage_dispatchers
+gen_stage_consumer_supervisor
 config
 mix_release

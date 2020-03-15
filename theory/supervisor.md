@@ -1,4 +1,4 @@
-## Supervisor
+## Supervisor behaviour
 
 Supervisor = Child specification + Supervision options
 

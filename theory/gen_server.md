@@ -1,4 +1,4 @@
-## GenServer
+## GenServer behaviour
 
 used for:
 - mutable state (by abstracting receive loop)
