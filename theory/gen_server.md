@@ -7,7 +7,7 @@ used for:
 
 ### Functions
 
-#### GenServer.start_link
+#### start_link
 
 Starts a GenServer process linked to the current process.
 Once the server is started, the `init/1` function of the given module is called with `init_arg` as its argument to initialize the server.
@@ -26,7 +26,7 @@ start_link(
 )
 ```
 
-#### GenServer.call
+#### call
 
 Makes a synchronous call to the server and waits for its reply.
 
@@ -38,7 +38,7 @@ call(
 ) :: response
 ```
 
-#### GenServer.cast
+#### cast
 
 Sends an asynchronous request to the server.
 
@@ -49,7 +49,7 @@ cast(
 ) :: :ok
 ```
 
-#### GenServer.reply
+#### reply
 
 Can be used instead of {:reply, _, _} inside `handle_call`. 
 Can even be invoked from a different process.
@@ -68,7 +68,7 @@ def handle_info({:reply, from}, state) do
 end
 ```
 
-#### GenServer.stop
+#### stop
 Synchronously stops server with given reason
 Normal reasons (no error logged): 
 ```elixir
@@ -83,28 +83,13 @@ GenServer
     ) :: :ok
 ```
 
-#### GenServer timeout mechanism:
-`:timeout` message will be sent if no handle_* is invoked 
-in timeout msecs.
-
-Setup: add timeout option to:
-``` elixir
-GenServer
-    init :: {:ok, _, timeout}
-GenServer
-    handle_* :: {_, _, timeout}
-
-
-GenServer
-    handle_info(:timeout, _)
+### Types
+```elixir
+from() :: {pid(), tag :: term()}
 ```
 
-Because a message may arrive before the timeout is set, even a timeout of 0 milliseconds is not guaranteed to execute. 
-To take another action immediately and unconditionally, use a `:continue` instruction + `handle_continue` callback.
-
 ### Callbacks
-`:reply, :noreply, :stop, :continue` are **instructions**
-`from()` = `{pid(), tag :: term()}`
+Each callback returns tuple with some instruction as a first element `:reply, :noreply, :stop, :continue`.
 
 #### handle: init
 ```elixir
@@ -229,6 +214,20 @@ If part of Supervision tree, during tree shutdown, GenServer will receive an exi
 So it's not reliable...
 
 Important clean-up rules belong in separate processes either by use of `monitoring` or by `link + trap_exit` (as in Supervisors)
+
+### Empty mailbox timeout mechanism
+Timeout may be included in return value of `init` or `handle_*` callbacks.
+If no messages appear in mailbox during specified interval, `:timeout` info message will be sent.
+
+``` elixir
+GenServer
+    init :: {:ok, _, timeout}
+GenServer
+    handle_* :: {_, _, timeout}
+
+GenServer
+    handle_info(:timeout, _)
+```
 
 ### Process monitoring
 

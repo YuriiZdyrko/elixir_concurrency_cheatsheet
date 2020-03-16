@@ -22,7 +22,7 @@ res = do_some_other_work()
 res + Task.await(task)
 ```
 
-#### Module-based
+### Module-based
 Limitation: can't be awaited on.
 
 ```elixir

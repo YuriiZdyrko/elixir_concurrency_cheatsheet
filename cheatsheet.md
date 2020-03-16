@@ -103,7 +103,7 @@ used for:
 
 ### Functions
 
-#### GenServer.start_link
+#### start_link
 
 Starts a GenServer process linked to the current process.
 Once the server is started, the `init/1` function of the given module is called with `init_arg` as its argument to initialize the server.
@@ -122,7 +122,7 @@ start_link(
 )
 ```
 
-#### GenServer.call
+#### call
 
 Makes a synchronous call to the server and waits for its reply.
 
@@ -134,7 +134,7 @@ call(
 ) :: response
 ```
 
-#### GenServer.cast
+#### cast
 
 Sends an asynchronous request to the server.
 
@@ -145,7 +145,7 @@ cast(
 ) :: :ok
 ```
 
-#### GenServer.reply
+#### reply
 
 Can be used instead of {:reply, _, _} inside `handle_call`. 
 Can even be invoked from a different process.
@@ -164,7 +164,7 @@ def handle_info({:reply, from}, state) do
 end
 ```
 
-#### GenServer.stop
+#### stop
 Synchronously stops server with given reason
 Normal reasons (no error logged): 
 ```elixir
@@ -179,28 +179,13 @@ GenServer
     ) :: :ok
 ```
 
-#### GenServer timeout mechanism:
-`:timeout` message will be sent if no handle_* is invoked 
-in timeout msecs.
-
-Setup: add timeout option to:
-``` elixir
-GenServer
-    init :: {:ok, _, timeout}
-GenServer
-    handle_* :: {_, _, timeout}
-
-
-GenServer
-    handle_info(:timeout, _)
+### Types
+```elixir
+from() :: {pid(), tag :: term()}
 ```
 
-Because a message may arrive before the timeout is set, even a timeout of 0 milliseconds is not guaranteed to execute. 
-To take another action immediately and unconditionally, use a `:continue` instruction + `handle_continue` callback.
-
 ### Callbacks
-`:reply, :noreply, :stop, :continue` are **instructions**
-`from()` = `{pid(), tag :: term()}`
+Each callback returns tuple with some instruction as a first element `:reply, :noreply, :stop, :continue`.
 
 #### handle: init
 ```elixir
@@ -326,6 +311,20 @@ So it's not reliable...
 
 Important clean-up rules belong in separate processes either by use of `monitoring` or by `link + trap_exit` (as in Supervisors)
 
+### Empty mailbox timeout mechanism
+Timeout may be included in return value of `init` or `handle_*` callbacks.
+If no messages appear in mailbox during specified interval, `:timeout` info message will be sent.
+
+``` elixir
+GenServer
+    init :: {:ok, _, timeout}
+GenServer
+    handle_* :: {_, _, timeout}
+
+GenServer
+    handle_info(:timeout, _)
+```
+
 ### Process monitoring
 
 Monitoring, unlike linking is one-way. Monitored process is not affected by monitoring process failure.
@@ -397,61 +396,82 @@ Agent.update(pid, fn state -> state + 1 end)
 ******
 # 3. Supervisor behaviour
 
-Supervisor = Child specification + Supervision options
+Supervisor = Child specification + Supervision options.
 
 ### Child specification
+
+#### Creation
+By `use GenServer`, `use Supervisor`, `use Task` `child_spec` callback is generated.
+It returns child specification, to be used by Supervisors:
+
 ```elixir
-%{
+child_spec().t :: %{
     id:
         term() \\ __MODULE__
     start:
         {m, f, a}
     restart:
-        :permanent (always restart)
-        | :temporary (never restart)
+        :permanent 
+        | :temporary 
         | :transient 
     shutdown:
         :brutal_kill
         | timeout
         | :infinity
+    type:
+        :worker 
+        | :supervisor
 }
-| {Stack, [:hello]}
-| Stack
 ```
 
-**Restart transient**
-No restart if exit reason:
-`:normal, :shutdown, {:shutdown, term}`
-Propagate to linked processes if exit reason not
-`:normal`
-
-**Default shutdown valuess**
-`:infinity` for Supervisors
-`5000` for Workers
-
-So if a Worker is trapping exits, it will receive `Process.exit(:shutdown)`, and will have 5000 to do cleanup, before being sent a `Process.exit(:kill)`.
-
-**Override child_spec outside implementation module**
+####  Usage in Supervisor
+1. Without modification
 ```elixir
-Supervisor.child_spec(
-    {Stack, [:hello]}, 
-    id: 1, 
-    shutdown: 10_000
+Supervisor.init([
+    supervisor_child_spec()
+], strategy: ...)
+```
+2. With some fields overridden
+```elixir
+Supervisor.init(
+    [
+        Supervisor.child_spec(supervisor_child_spec(), id: 1),
+        Supervisor.child_spec(supervisor_child_spec(), id: 2)
+    ], 
+    strategy: ...
 )
 ```
 
-### Supervision options
-Used for top-level or module-based Supervisors:
+### child_spec:restart and exit reasons
+```elixir
+                    :normal  |  :shutdown, {:shutdown, term} | other
+permanent_restart:  yes      |  yes                          | yes
+temporary_restart:  no       |  no                           | no
+transient_restart:  no       |  no                           | yes
+
+exit_logged:        no       |  no                           | yes
+linked_proc_exit:   no       |  yes*                         | yes*
 ```
+
+yes* - restart with same reason, unless trapping exits
+
+### child_spec:shutdown
+Defaults: `:supervisor`-`:infinity`, `:worker`-`5000`
+
+So if a Worker is trapping exits, it will receive `Process.exit(:shutdown)`, and will have 5000 to do cleanup, before being sent a `Process.exit(:kill)`.
+
+### Supervision options
+```elixir
+# Examples for top-level or module-based Supervisors
 Supervisor.start_link(children, options)
 Supervisor.init(children, options)
 ```
 ```elixir
 strategy:
-    :one_for_one
+    :one_for_one \\ default
     | :rest_for_one
     | :one_for_all
-max_restarts:
+max_restarts: # if reached, supervisor exits with :shutdown reason
     count \\ 3
 max_seconds:
     count \\ 5
@@ -491,23 +511,35 @@ defmodule MyApp.Supervisor do
 end
 ```
 
+### Types
 
-## Functions
-```
-child_spec/2
-count_children/1
-delete_child/2
-init/2
-restart_child/2
-start_child/2
-start_link/2
-start_link/3
-stop/3
-terminate_child/2
-which_children/1
+```elixir
+supervisor_child_spec().t ::
+    child_spec()
+    | {module(), term()} 
+    | module()
+
+supervisor_init_opts().t ::
+    {:strategy, strategy()}
+    | {:max_restarts, non_neg_integer()}
+    | {:max_seconds, pos_integer()}
 ```
 
-### Supervisor
+### Functions
+
+```elixir
+start_link/2 # same as GenServer
+start_link/3 # same as GenServer
+```
+
+
+```elixir
+# Used inside init/1 callback
+init(
+    [supervisor_child_spec()], 
+    supervisor_init_opts()
+) :: {:ok, tuple()}
+```
 
 ```elixir
 stop(
@@ -515,14 +547,36 @@ stop(
     reason :: term(), 
     timeout()
 ) :: :ok
+```
 
+```elixir
+child_spec(supervisor_child_spec(), overrides) ::
+  child_spec()
+
+# supervisor.child_spec() is often used to pass spec id, 
+# to be able to start multiple instances of same module.
+# examples:
+Supervisor.child_spec(
+    { Stack, [:hello] }, 
+    id: MyStack, 
+    shutdown: 10_000
+})
+Supervisor.child_spec(
+    {Agent, fn -> :ok end}, 
+    id: {Agent, 1}
+)
+```
+
+```elixir
 count_children(supervisor()) :: %{
   specs: non_neg_integer(),
   active: non_neg_integer(),
   supervisors: non_neg_integer(),
   workers: non_neg_integer()
 }
+```
 
+```elixir
 which_children(supervisor()) :: [
     {
         term() | :undefined, = child_id
@@ -533,14 +587,10 @@ which_children(supervisor()) :: [
 ]
 ```
 
-### Supervisor children
-
 ```elixir
 start_child(
     supervisor(), 
-    :supervisor.child_spec()
-    | {module(), term()} 
-    | module()
+    supervisor_child_spec()
 )
 ::  {:ok, child()}
     | {:ok, child(), info :: term()}
@@ -549,10 +599,12 @@ start_child(
             | :already_present 
             | term()
     }
+```
 
+```elixir
 restart_child(
     supervisor(), child_id
-) 
+)
 ::  {:ok, child()} 
     | {:ok, child(), term()} 
     | {:error, :not_found 
@@ -560,17 +612,20 @@ restart_child(
                 | :restarting 
                 | term()
     }
+```
 
-
-// Terminates a running child process
+```elixir
+# Terminates a running child process
 terminate_child(
     supervisor(), child_id
 ) 
 ::  :ok
     | {:error, :not_found}
 
+```
 
-// Deletes specification for a non-running child process
+```elixir
+# Deletes specification for a non-running child process
 delete_child(
     supervisor(), child_id
 )
