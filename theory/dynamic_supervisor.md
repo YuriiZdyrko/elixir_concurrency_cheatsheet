@@ -100,5 +100,3 @@ which_children(supervisor())
     ...
 ]
 ```
-
-TODO: fix elixir docs to show correct return values for DynamicSupervisor.start_child

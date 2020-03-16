@@ -1,8 +1,9 @@
 ## GenStage
 
 Stages are used for:
+- provide **buffering**
 - provide **back-pressure**
-- leverage **concurrency**
+- leverage **concurrency** and **fault-tolerance**
 
 Use `Task.async_stream` instead if both conditions are true:
 - list to be processed is already in memory

@@ -93,7 +93,6 @@ sleep(timeout)
 info(pid)
 list() # list of all running PIDs
 ```
-******
 # 2. GenServer behaviour
 
 used for:
@@ -393,7 +392,6 @@ Agent.update(pid, fn state -> state + 1 end)
    messages_out: 1
  ]}
 ```
-******
 # 3. Supervisor behaviour
 
 Supervisor = Child specification + Supervision options.
@@ -636,7 +634,6 @@ delete_child(
     }
 ```
 
-******
 # 4. DynamicSupervisor behaviour
 
 DynamicSupervisor is started without Child Specification.
@@ -739,9 +736,6 @@ which_children(supervisor())
     ...
 ]
 ```
-
-TODO: fix elixir docs to show correct return values for DynamicSupervisor.start_child
-******
 # 5. Registry
 
 A local, decentralized and scalable key-value process storage.
@@ -884,7 +878,6 @@ put_meta(registry, key, value)
     :: :ok
 ```
 
-******
 # 6. Task
 
 Execute function in a new process, monitored by, or linked to a caller.
@@ -909,7 +902,7 @@ res = do_some_other_work()
 res + Task.await(task)
 ```
 
-#### Module-based
+### Module-based
 Limitation: can't be awaited on.
 
 ```elixir
@@ -934,7 +927,6 @@ defmodule MyTask do
 end
 ```
 
-******
 # 7. Task.Supervisor
 
 Dynamically spawn and supervise tasks.
@@ -1105,12 +1097,12 @@ Failure in Task brings caller down as well.
 Failure in Task doesn't bring caller down, but results in {:exit, error} enumberable item result.
 
 
-******
 # 8. GenStage
 
 Stages are used for:
+- provide **buffering**
 - provide **back-pressure**
-- leverage **concurrency**
+- leverage **concurrency** and **fault-tolerance**
 
 Use `Task.async_stream` instead if both conditions are true:
 - list to be processed is already in memory
@@ -1894,7 +1886,6 @@ GenStage.stream([{
 Once all producers are subscribed to, their demand is automatically set to :forward mode.
 
 `GenStage.stream/1` will "hijack" the inbox of the process enumerating the stream to subscribe and receive messages from producers.
-******
 # 9. GenStage dispatchers
 
 ### GenStage.Dispatcher behaviour
@@ -2016,7 +2007,6 @@ GenStage.sync_subscribe(
     partition: 0
 )
 ```
-******
 # 10. ConsumerSupervisor behaviour
 
 A supervisor that starts children as events flow in
@@ -2105,7 +2095,6 @@ count_children(supervisor)
 which_children(supervisor)
 ```
 
-******
 # 11. Application configuration
 
 ```elixir
@@ -2224,7 +2213,6 @@ releases: Config.Reader.read!("rel/releases.exs")
 read_imports!(file, imported_paths \\ [])
 # Reads configuration file and it's imports.
 ```
-******
 # 12. Mix release
 
 Assembles a self-contained release for the current project.
@@ -2412,4 +2400,3 @@ pid            Prints the operating system PID
                of the running system via a remote command
 version        Prints the release name and version to be booted
 ```
-******

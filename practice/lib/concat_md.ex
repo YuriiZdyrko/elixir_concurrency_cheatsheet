@@ -28,7 +28,7 @@ defmodule Practice.ConcatMd do
         file_path
         |> File.read!()
         |> String.trim_leading("#")
-        |> Kernel.<>("\n******\n")
+        |> Kernel.<>("\n")
 
       :ok =
         File.open(dest, [:append])
