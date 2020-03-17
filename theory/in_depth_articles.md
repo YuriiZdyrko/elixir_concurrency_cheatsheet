@@ -16,8 +16,18 @@ https://medium.com/@StevenLeiva1/elixir-process-registries-a27f813d94e3
 
 ### GenStage
 
-#1 Fun article
-https://blog.echobind.com/how-genstage-kept-medical-records-current-6140ee1e0d63
+#### 1. Sending Millions of HTTP Requests Using GenStage
+
+Great production-style example. 
+Probably most sophisticated around. Big ideas:
+- showcased deeply nested GenStage hierarchy
+- rate-limiting example using Facebook API quota
+- very in-depth termination explanation
+
+http://big-elephants.com/2019-01/facebook-genstage/
+
+
+#### TODO: read ones below
 
 https://medium.com/@andreichernykh/elixir-a-few-things-about-genstage-id-wish-to-knew-some-time-ago-b826ca7d48ba
 

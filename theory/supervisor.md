@@ -2,6 +2,22 @@
 
 Supervisor = Child specification + Supervision options.
 
+**Design recommenation** 
+If there's need to dynamically spawn a process from a `:worker` OTP module, it's best to do it through a Supervisor. It gives better control over fault-tolerance of the system.
+
+Supervision provides fault-tolerance by isolating failures effects.
+
+```elixir
+Instead: [1...n] * GenStage.start_link, do:
+Many: 
+MyConsumerSupervisor.start_link() # start stage inside supervisor
+One: MyOneStageSupervisor.start_link()
+
+Instead: 1...n] * GenServer.start_link
+Many: MyDynamicSupervisor.start_child()
+Do: MySupervisor.start_link()
+```
+
 ### Child specification
 
 #### Creation

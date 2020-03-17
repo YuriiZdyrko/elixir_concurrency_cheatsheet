@@ -1,7 +1,7 @@
 ## Registry
 
 A local, decentralized and scalable key-value process storage.
-It allows developers to lookup one or more processes with a given key.
+Each entry in the registry is associated to the process that has registered the key. If the process crashes, the keys associated to that process are automatically removed. 
 
 Keys types:
 `:unique keys` - key points to 0 or 1 processes
@@ -72,6 +72,26 @@ Registry
         end
     )
     => :ok
+```
+
+**Example 3:**
+Encapsulation of `{:via}` tuple inside child module.
+By registering it with `{:via}` tuple, child process can restart, but parent process will still have access to it using `{:via}` tuple.
+```elixir
+# Child module:
+MyConsumerSupervisor
+    start_link(account_id)
+        :: ConsumerSupervisor.start_link(arg, name: via_tuple(account_id))
+    via_tuple(account_id)
+        :: {:via, ...}
+
+# Inside parent module (for example in handle_info):
+MyConsumerSupervisor.start_link(account_id, self())
+
+# Now inside parent module we can access child:
+MyConsumerSupervisor.via_tuple(account_id)
+|> Process.whereis()
+|> ConsumerSupervisor.count_children(pid)
 ```
 
 ### Functions

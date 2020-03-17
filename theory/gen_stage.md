@@ -1,9 +1,12 @@
 ## GenStage
 
-Stages are used for:
-- provide **buffering**
-- provide **back-pressure**
-- leverage **concurrency** and **fault-tolerance**
+Stages are famous for:
+- **back-pressure** to limit load on our own and/or external systems
+- **buffering** to keep events before demand arrives
+- leveraging **concurrency**
+- support of **fault-tolerance** like any other OTP behaviour,
+  with additional features provided by `ConsumerSupervisor` behaviour.
+- custom dispatch mechanisms using `GenStage.Dispatcher`s behaviour implementationss.
 
 Use `Task.async_stream` instead if both conditions are true:
 - list to be processed is already in memory
@@ -21,12 +24,13 @@ Consumer <-> Producer is a **many-to-many** relationship.
 1. Consumers send to Producers:
 - start subscription
 - cancel subscription
-- send demand for a given subscription
+- demand for a given subscription
+  (new demand can't be sent until previous was satisfied)
 
 2. Producers send to Consumers:
 - cancel subscription
   (used as confirmation of clients cancellations, or to cancel upstream demand)
-- send events to given subscription
+- send events to given subscription, using return value of `handle_call`, `handle_info`, `handle_demand`, `handle_cast` callbacks.
 
 #### Protocol visualization
 ```
@@ -321,7 +325,11 @@ ConsumerSupervisor module processes events asynchronously by starting a process 
 
 ### Back-pressure
 
-`handle_subscribe/4` + `manual` is also useful for implementing custom **back-pressure** mechanisms.
+Back-pressure is most useful to limit number of requests to some limited resource, like http endpoint.
+Custom **back-pressure** mechanisms are implemented using 
+`handle_subscribe/4 -> :manual`. `send_after + handle_info -> GenStage.ask` is often used.
+If there's a tall hierarchy of stages, it's most intuitive to have back-pressure in one of most upstream consumers. 
+Example of back-pressure: consumer will issue the demand for 2 events, but no more than once a minute.
 
 #### Default back-pressure mechanism
 When data is sent between stages, it is done by a message protocol that provides back-pressure. - consumer subscribes to the producer. Each subscription has a unique reference.
@@ -336,21 +344,22 @@ Implement a consumer that is allowed to process a limited number of events per t
 ```elixir
 defmodule RateLimiter do
   @moduledoc """
-  The trick is - Consumer manages Producers' pending demand, 
-  instead of Producer doing this.
-  There are 2 main pieces of puzzle:
+  To limit demand, it's necessary to:
+  - return {:manual, producers} in handle_subscribe
+  - manually call GenStage.ask
   
+  Implementation details:
   1. ask_and_schedule calls itself recursively with an interval:
     - GenStage.ask(from, pending) 
-      -> trigger handle_events
-    - resets pending to 0, which results in possible GenStage.ask(from, 0) repeated calls,
-      but it's harmless, as handle_demand(0) is ignored by Producers.
-    
+      -> pending > 0, therefore 
+      (GenStage.ask is not ignored)
+    - resets pending to 0 
+      (GenStage.ask(from, 0) is ignored)
   2. handle_events (triggered by GenStage.ask(from, pending))
     - gets new events
     - processes them
     - sets pending to length(events) 
-      -> thanks to this ask_and_schedule will repeat 1-2 cycle
+      -> repeat 1-2 cycle
   """
   use GenStage
 
@@ -532,22 +541,32 @@ handle_events(events :: [event], from(), state) ::
 
 #### handle_subscribe
 Invoked in both producers and consumers when consumer subscribes to producer.
+For example :producer_consumer may have handle_subscribe called 2 times: 
+```elixir
+def handle_subscribe(:producer, _opts, from, state), do:
+  GenStage.ask(from, 1)
+  {:manual, Map.put(state, :from, from)}
+def handle_subscribe(:consumer, _opts, _from, state), do:
+  {:automatic, state}
+```
+
 ```elixir
 handle_subscribe(
   producer_or_consumer :: :producer | :consumer,
   subscription_options(),
   from(),
-  state :: term()
+  state
 ) :: 
   {:automatic | :manual, new_state} 
   | {:stop, reason, new_state}
 
   # {:automatic, new_state} (default)
-  # demand is sent automatically to producer
+  # demand is automatically sent to producer, using :mix/max_demand
 
   # {:manual, new_state}
-  # supported only by Consumers
+  # supported only by Consumers and ProducersConsumers
   # demand must be sent via ask(from(), demand)
+  # :mix/max_demand not supported in this mode.
 ```
 
 #### handle_cancel
