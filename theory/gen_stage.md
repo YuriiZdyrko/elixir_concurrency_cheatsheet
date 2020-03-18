@@ -1,12 +1,18 @@
 ## GenStage
 
 Stages are famous for:
-- **back-pressure** to limit load on our own and/or external systems
+- **back-pressure** to limit load on our own and/or external systems, also helps avoid buffer overload.
 - **buffering** to keep events before demand arrives
 - leveraging **concurrency**
 - support of **fault-tolerance** like any other OTP behaviour,
   with additional features provided by `ConsumerSupervisor` behaviour.
 - custom dispatch mechanisms using `GenStage.Dispatcher`s behaviour implementationss.
+
+With stages there's some complexity:
+- handling events, demand
+- subscription and de-subscription
+- taking care of supervision
+- terminating dynamically started Stages/handling failures
 
 Use `Task.async_stream` instead if both conditions are true:
 - list to be processed is already in memory
@@ -495,8 +501,13 @@ init(args) ::
 
 :consumer and :producer_consumer
   :subscribe_to
-    [ProducerModule]
-    | [{ProducerModule, [subscription_options()]}]
+    [stage()]
+    | [{stage(), [subscription_options()]}]
+
+  where stage() commonly is:
+    pid
+    | ProducerModuleRegisteredName
+    | {:via, Registry, {RegistryName, key}}
 ```
 
 #### handle_call
@@ -589,6 +600,7 @@ handle_cancel(
 #### stage().t
 Stage registered name or pid
 ```elixir
+
 stage() ::
   pid()
   | atom()
@@ -603,6 +615,9 @@ from() ::
   {pid(), subscription_tag()}
 # Can be obtained in handle_subscribe/4, and stored in stage's state.
 ```
+#### stage().t
+stage
+
 #### subscription_options().t
 Option used by the subscribe* functions
 ```elixir
@@ -651,7 +666,7 @@ can be used to update `subscription_options`.
 
 ```elixir
 subscribe_args :: 
-  stage, 
+  stage(), 
   subscription_options()
 
 sync_returns ::

@@ -16,28 +16,30 @@ https://medium.com/@StevenLeiva1/elixir-process-registries-a27f813d94e3
 
 ### GenStage
 
-#### 1. Sending Millions of HTTP Requests Using GenStage
-
 Great production-style example. 
 Probably most sophisticated around. Big ideas:
 - showcased deeply nested GenStage hierarchy
 - rate-limiting example using Facebook API quota
 - very in-depth termination explanation
-
+`going_deep_with_concurrency/practice/lib/gen_stage_hierarchy`
 http://big-elephants.com/2019-01/facebook-genstage/
 
-
-#### TODO: read ones below
-
+Easy read.
+An example of using DynamicSupervisor to start multiple GenStage Consumers.
 https://medium.com/@andreichernykh/elixir-a-few-things-about-genstage-id-wish-to-knew-some-time-ago-b826ca7d48ba
 
+Article about dynamically modifying pipeline.
+It's possible, by reliance on GenServer.cancel
 https://stackoverflow.com/questions/52968929/runtime-dynamic-compute-graph-using-elixir-genstages
 
+Not enough depth. More Blockchain than elixir.
 https://blog.appsignal.com/2018/11/13/elixir-alchemy-understanding-elixirs-genstages-querying-the-blockchain.html
 
-http://big-elephants.com/2019-01/facebook-genstage/
-
+Very good showcasing of fault-tolerance.
+Example of 0..N producers to 1 Consumer.
+`going_deep_with_concurrency/practice/lib/dynamic_producer` (iex - ready)
 https://norbertka.me/posts/dynamic_genstage_producers/
+
 
 https://blog.jola.dev/push-based-genstage
 

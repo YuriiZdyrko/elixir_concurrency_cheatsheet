@@ -105,7 +105,7 @@ defmodule Facebook.CampaignsProducer do
   # this is done to not shutdown CampaignsProducers which haven't had a chance to fetch
   # campaigns from facebook api yet
   def handle_info(:die_maybe, %{demand_state: {queue, _}, meta: meta} = state) do
-    if :queue.len(queue) == 0 and meta.active and not consumers_alive?(meta.ads_account.id, meta.date) ->
+    if :queue.len(queue) == 0 and meta.active and not consumers_alive?(meta.ads_account.id, meta.date) do
       {:stop, :normal, state}
     else
       # Keep in mind this is a strawman implementation.
@@ -126,3 +126,4 @@ defmodule Facebook.CampaignsProducer do
         false
     end
   end
+end

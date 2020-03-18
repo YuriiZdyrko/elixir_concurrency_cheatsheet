@@ -9,7 +9,8 @@ defmodule Practice.Application do
     children = [
       # Starts a worker by calling: Practice.Worker.start_link(arg)
       {Task.Supervisor, name: Practice.TaskSupervisor},
-      Practice.Async
+      Practice.Async,
+      DP.AppSupervisor
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

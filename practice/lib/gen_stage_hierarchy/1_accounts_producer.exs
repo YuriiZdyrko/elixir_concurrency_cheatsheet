@@ -72,4 +72,9 @@ defmodule Facebook.AccountsProducer do
         {Enum.reverse(events), {queue, demand}}
     end
   end
+
+  defp fetch_account_ids() do
+    # Not impl
+    []
+  end
 end

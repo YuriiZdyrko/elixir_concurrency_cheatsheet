@@ -1,6 +1,6 @@
 ## Process
 
-Conveniences for working with processes
+Conveniences for working with processes.
 
 ```elixir
 # spawn_options().t
@@ -59,7 +59,7 @@ spawn_opt_option() =
 # Spawn/exit/hybernate
 spawn(fun, spawn_options()) 
 | spawn(m, f, a, spawn_options())
-exit(pid, reason)
+exit(pid, reason)*
 alive?(pid)
 hibernate(m, f, a)
 
@@ -93,3 +93,18 @@ sleep(timeout)
 info(pid)
 list() # list of all running PIDs
 ```
+
+### Importance of exiting with :normal
+* `Process.exit(pid, :normal)` will be ignored if pid != self()
+This is preferred approach:
+```elixir 
+  # In caller process
+  Process.send(pid, :exit_normal, [])
+  +
+  # In stopped implementation module
+  handle_info(:exit_normal)
+    {stop, :normal, state}
+```
+Exit :normal is especially common for marking as done children, started by dynamic supervisors.
+Supervisors and DynamicSupervisors in this case will do whatever is their :strategy.
+Or for ConsumerSupervisor - will be able to continue to process events.

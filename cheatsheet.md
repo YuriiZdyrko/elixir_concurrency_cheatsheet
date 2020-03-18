@@ -1151,20 +1151,17 @@ Possible Consumer actions:
 defmodule A do
   use GenStage
 
-  def start_link(number) do
+  def start_link(number), do:
     GenStage.start_link(A, number, name: __MODULE__)
-  end
 
-  def init(counter) do
+  def init(counter), do:
     {:producer, counter}
-  end
 
-  def handle_demand(demand, counter) when demand > 0 do
+  def handle_demand(demand, counter) when demand > 0, do:
     # If the counter is 3 and we ask for 2 items, we will
     # emit the items 3 and 4, and set the state to 5.
     events = Enum.to_list(counter..counter+demand-1)
     {:noreply, events, counter + demand}
-  end
 end
 ```
 
@@ -1177,15 +1174,14 @@ end
 defmodule B do
   use GenStage
 
-  def start_link(multiplier) do
+  def start_link(multiplier), do:
     GenStage.start_link(B, multiplier)
-  end
 
   def init(multiplier) do
-    # Manual subscription
+    # Dynamic subscription
     # {:producer_consumer, multiplier}
     # + GenStage.sync_subscribe(b, to: a)
-
+    # or
     # Automatic subscription, relies on named Producer process.
     # Consumer crash will automatically re-subscribe it
     {
@@ -1206,24 +1202,16 @@ end
 defmodule C do
   use GenStage
 
-  def start_link(_opts) do
+  def start_link(_opts), do:
     GenStage.start_link(C, :ok)
-  end
 
-  def init(:ok) do
+  def init(:ok), do:
     {:consumer, :the_state_does_not_matter}
-  end
 
-  def handle_events(events, _from, state) do
-    # Wait for a second.
-    Process.sleep(1000)
-
-    # Inspect the events.
-    IO.inspect(events)
-
-    # We are a consumer, so we would never emit items.
+  def handle_events(events, _from, state), do:
+    # handle events...
+    # We are a consumer, so we never emit items.
     {:noreply, [], state}
-  end
 end
 ```
 
@@ -1370,22 +1358,19 @@ defmodule Printer do
   use GenStage
 
   @doc "Starts the consumer."
-  def start_link() do
+  def start_link(), do:
     GenStage.start_link(__MODULE__, :ok)
-  end
 
-  def init(:ok) do
+  def init(:ok), do:
     # Starts a permanent subscription to the broadcaster
     # which will automatically start requesting items.
     {:consumer, :ok, subscribe_to: [QueueBroadcaster]}
-  end
 
-  def handle_events(events, _from, state) do
+  def handle_events(events, _from, state), do:
     for event <- events do
       IO.inspect {self(), event}
     end
     {:noreply, [], state}
-  end
 end
 ```
 
@@ -1834,11 +1819,8 @@ Resulting Producer can be used with GenStage or Flow (integrated by use of `Flow
 ```elixir
 GenServer.on_start() ::
   {:ok, pid()} 
-  | :ignore 
-  | {:error, 
-    {:already_started, pid()} 
-    | term()
-  }
+  | :ignore
+  | {:error, {:already_started, pid()} | term()}
 
 producer_opts() ::
   link: \\ true,

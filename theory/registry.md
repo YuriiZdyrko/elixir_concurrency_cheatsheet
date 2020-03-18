@@ -1,5 +1,7 @@
 ## Registry
 
+### Description
+
 A local, decentralized and scalable key-value process storage.
 Each entry in the registry is associated to the process that has registered the key. If the process crashes, the keys associated to that process are automatically removed. 
 
@@ -14,6 +16,40 @@ Usage:
 - associate value to a process (using the :via option)
 - custom dispatching rules, or a pubsub implementation.
 
+### Setup
+**Setup 1:** Module-based - useful for encapsulating :via tuple creation, and other Registry methods.
+```elixir
+defmodule MyRegistry do
+  def start_link, do:
+    Registry.start_link(keys: :unique, name: __MODULE__)
+
+  def via_tuple(key), do:
+    {:via, Registry, {__MODULE__, key}}
+
+  def child_spec(_), do:
+    Supervisor.child_spec(
+      Registry,
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, []}
+    )
+end
+
+# In Supervisor
+def init(_init_arg) do
+    children = [
+        MyRegistry,
+        ...
+```
+
+**Setup 2:** Inline in Supervisor
+```elixir
+def init(_init_arg) do
+    children = [
+        {Registry, keys: :unique, name: MyRegistry},
+        ...
+```
+
+### Usage
 **Example 1:** Registration using `via` tuple
 ```elixir
 {:ok, _} = Registry.start_link(keys: :unique, name: Registry.ViaTest)
