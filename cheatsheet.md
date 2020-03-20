@@ -1,6 +1,6 @@
 # 1. Process
 
-Conveniences for working with processes
+Conveniences for working with processes.
 
 ```elixir
 # spawn_options().t
@@ -59,7 +59,7 @@ spawn_opt_option() =
 # Spawn/exit/hybernate
 spawn(fun, spawn_options()) 
 | spawn(m, f, a, spawn_options())
-exit(pid, reason)
+exit(pid, reason)*
 alive?(pid)
 hibernate(m, f, a)
 
@@ -93,6 +93,21 @@ sleep(timeout)
 info(pid)
 list() # list of all running PIDs
 ```
+
+### Importance of exiting with :normal
+* `Process.exit(pid, :normal)` will be ignored if pid != self()
+This is preferred approach:
+```elixir 
+  # In caller process
+  Process.send(pid, :exit_normal, [])
+  +
+  # In stopped implementation module
+  handle_info(:exit_normal)
+    {stop, :normal, state}
+```
+Exit :normal is especially common for marking as done children, started by dynamic supervisors.
+Supervisors and DynamicSupervisors in this case will do whatever is their :strategy.
+Or for ConsumerSupervisor - will be able to continue to process events.
 # 2. GenServer behaviour
 
 used for:
@@ -395,6 +410,22 @@ Agent.update(pid, fn state -> state + 1 end)
 # 3. Supervisor behaviour
 
 Supervisor = Child specification + Supervision options.
+
+**Design recommenation** 
+If there's need to dynamically spawn a process from a `:worker` OTP module, it's best to do it through a Supervisor. It gives better control over fault-tolerance of the system.
+
+Supervision provides fault-tolerance by isolating failures effects.
+
+```elixir
+Instead: [1...n] * GenStage.start_link, do:
+Many: 
+MyConsumerSupervisor.start_link() # start stage inside supervisor
+One: MyOneStageSupervisor.start_link()
+
+Instead: 1...n] * GenServer.start_link
+Many: MyDynamicSupervisor.start_child()
+Do: MySupervisor.start_link()
+```
 
 ### Child specification
 
@@ -738,8 +769,10 @@ which_children(supervisor())
 ```
 # 5. Registry
 
+### Description
+
 A local, decentralized and scalable key-value process storage.
-It allows developers to lookup one or more processes with a given key.
+Each entry in the registry is associated to the process that has registered the key. If the process crashes, the keys associated to that process are automatically removed. 
 
 Keys types:
 `:unique keys` - key points to 0 or 1 processes
@@ -752,6 +785,40 @@ Usage:
 - associate value to a process (using the :via option)
 - custom dispatching rules, or a pubsub implementation.
 
+### Setup
+**Setup 1:** Module-based - useful for encapsulating :via tuple creation, and other Registry methods.
+```elixir
+defmodule MyRegistry do
+  def start_link, do:
+    Registry.start_link(keys: :unique, name: __MODULE__)
+
+  def via_tuple(key), do:
+    {:via, Registry, {__MODULE__, key}}
+
+  def child_spec(_), do:
+    Supervisor.child_spec(
+      Registry,
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, []}
+    )
+end
+
+# In Supervisor
+def init(_init_arg) do
+    children = [
+        MyRegistry,
+        ...
+```
+
+**Setup 2:** Inline in Supervisor
+```elixir
+def init(_init_arg) do
+    children = [
+        {Registry, keys: :unique, name: MyRegistry},
+        ...
+```
+
+### Usage
 **Example 1:** Registration using `via` tuple
 ```elixir
 {:ok, _} = Registry.start_link(keys: :unique, name: Registry.ViaTest)
@@ -810,6 +877,26 @@ Registry
         end
     )
     => :ok
+```
+
+**Example 3:**
+Encapsulation of `{:via}` tuple inside child module.
+By registering it with `{:via}` tuple, child process can restart, but parent process will still have access to it using `{:via}` tuple.
+```elixir
+# Child module:
+MyConsumerSupervisor
+    start_link(account_id)
+        :: ConsumerSupervisor.start_link(arg, name: via_tuple(account_id))
+    via_tuple(account_id)
+        :: {:via, ...}
+
+# Inside parent module (for example in handle_info):
+MyConsumerSupervisor.start_link(account_id, self())
+
+# Now inside parent module we can access child:
+MyConsumerSupervisor.via_tuple(account_id)
+|> Process.whereis()
+|> ConsumerSupervisor.count_children(pid)
 ```
 
 ### Functions
@@ -1099,10 +1186,21 @@ Failure in Task doesn't bring caller down, but results in {:exit, error} enumber
 
 # 8. GenStage
 
-Stages are used for:
-- provide **buffering**
-- provide **back-pressure**
-- leverage **concurrency** and **fault-tolerance**
+A specification for exchanging events with back-pressure between Elixir producers and consumers.
+
+Stages are famous for:
+- **back-pressure** to limit load on our own and/or external systems
+- **buffering** to keep events before demand arrives
+- leveraging **concurrency**
+- support of **fault-tolerance** like any other OTP behaviour,
+  with additional features provided by `ConsumerSupervisor` behaviour.
+- custom dispatch mechanisms using `GenStage.Dispatcher`s behaviour implementationss.
+
+With stages there's some complexity:
+- handling events, demand
+- subscription and de-subscription
+- taking care of supervision
+- terminating dynamically started Stages/handling failures
 
 Use `Task.async_stream` instead if both conditions are true:
 - list to be processed is already in memory
@@ -1120,12 +1218,13 @@ Consumer <-> Producer is a **many-to-many** relationship.
 1. Consumers send to Producers:
 - start subscription
 - cancel subscription
-- send demand for a given subscription
+- demand for a given subscription
+  (new demand can't be sent until previous was satisfied)
 
 2. Producers send to Consumers:
 - cancel subscription
   (used as confirmation of clients cancellations, or to cancel upstream demand)
-- send events to given subscription
+- send events to given subscription, using return value of `handle_call`, `handle_info`, `handle_demand`, `handle_cast` callbacks.
 
 #### Protocol visualization
 ```
@@ -1151,17 +1250,20 @@ Possible Consumer actions:
 defmodule A do
   use GenStage
 
-  def start_link(number), do:
+  def start_link(number) do
     GenStage.start_link(A, number, name: __MODULE__)
+  end
 
-  def init(counter), do:
+  def init(counter) do
     {:producer, counter}
+  end
 
-  def handle_demand(demand, counter) when demand > 0, do:
+  def handle_demand(demand, counter) when demand > 0 do
     # If the counter is 3 and we ask for 2 items, we will
     # emit the items 3 and 4, and set the state to 5.
     events = Enum.to_list(counter..counter+demand-1)
     {:noreply, events, counter + demand}
+  end
 end
 ```
 
@@ -1174,14 +1276,15 @@ end
 defmodule B do
   use GenStage
 
-  def start_link(multiplier), do:
+  def start_link(multiplier) do
     GenStage.start_link(B, multiplier)
+  end
 
   def init(multiplier) do
-    # Dynamic subscription
+    # Manual subscription
     # {:producer_consumer, multiplier}
     # + GenStage.sync_subscribe(b, to: a)
-    # or
+
     # Automatic subscription, relies on named Producer process.
     # Consumer crash will automatically re-subscribe it
     {
@@ -1202,16 +1305,24 @@ end
 defmodule C do
   use GenStage
 
-  def start_link(_opts), do:
+  def start_link(_opts) do
     GenStage.start_link(C, :ok)
+  end
 
-  def init(:ok), do:
+  def init(:ok) do
     {:consumer, :the_state_does_not_matter}
+  end
 
-  def handle_events(events, _from, state), do:
-    # handle events...
-    # We are a consumer, so we never emit items.
+  def handle_events(events, _from, state) do
+    # Wait for a second.
+    Process.sleep(1000)
+
+    # Inspect the events.
+    IO.inspect(events)
+
+    # We are a consumer, so we would never emit items.
     {:noreply, [], state}
+  end
 end
 ```
 
@@ -1358,19 +1469,22 @@ defmodule Printer do
   use GenStage
 
   @doc "Starts the consumer."
-  def start_link(), do:
+  def start_link() do
     GenStage.start_link(__MODULE__, :ok)
+  end
 
-  def init(:ok), do:
+  def init(:ok) do
     # Starts a permanent subscription to the broadcaster
     # which will automatically start requesting items.
     {:consumer, :ok, subscribe_to: [QueueBroadcaster]}
+  end
 
-  def handle_events(events, _from, state), do:
+  def handle_events(events, _from, state) do
     for event <- events do
       IO.inspect {self(), event}
     end
     {:noreply, [], state}
+  end
 end
 ```
 
@@ -1405,7 +1519,11 @@ ConsumerSupervisor module processes events asynchronously by starting a process 
 
 ### Back-pressure
 
-`handle_subscribe/4` + `manual` is also useful for implementing custom **back-pressure** mechanisms.
+Back-pressure is most useful to limit number of requests to some limited resource, like http endpoint.
+Custom **back-pressure** mechanisms are implemented using 
+`handle_subscribe/4 -> :manual`. `send_after + handle_info -> GenStage.ask` is often used.
+If there's a tall hierarchy of stages, it's most intuitive to have back-pressure in one of most upstream consumers. 
+Example of back-pressure: consumer will issue the demand for 2 events, but no more than once a minute.
 
 #### Default back-pressure mechanism
 When data is sent between stages, it is done by a message protocol that provides back-pressure. - consumer subscribes to the producer. Each subscription has a unique reference.
@@ -1420,21 +1538,22 @@ Implement a consumer that is allowed to process a limited number of events per t
 ```elixir
 defmodule RateLimiter do
   @moduledoc """
-  The trick is - Consumer manages Producers' pending demand, 
-  instead of Producer doing this.
-  There are 2 main pieces of puzzle:
+  To limit demand, it's necessary to:
+  - return {:manual, producers} in handle_subscribe
+  - manually call GenStage.ask
   
+  Implementation details:
   1. ask_and_schedule calls itself recursively with an interval:
     - GenStage.ask(from, pending) 
-      -> trigger handle_events
-    - resets pending to 0, which results in possible GenStage.ask(from, 0) repeated calls,
-      but it's harmless, as handle_demand(0) is ignored by Producers.
-    
+      -> pending > 0, therefore 
+      (GenStage.ask is not ignored)
+    - resets pending to 0 
+      (GenStage.ask(from, 0) is ignored)
   2. handle_events (triggered by GenStage.ask(from, pending))
     - gets new events
     - processes them
     - sets pending to length(events) 
-      -> thanks to this ask_and_schedule will repeat 1-2 cycle
+      -> repeat 1-2 cycle
   """
   use GenStage
 
@@ -1550,8 +1669,8 @@ init(args) ::
     :accumulate
     # accumulate demand until set to :forward via demand/2
 
-# :accumulate is useful as a synchronization mechanism, 
-# where the demand is accumulated until all consumers are subscribed. 
+# :accumulate can be useful as a synchronization mechanism, 
+# to accumulate demand until all consumers are subscribed. 
 
 :producer and :producer_consumer
   :buffer_size
@@ -1570,8 +1689,13 @@ init(args) ::
 
 :consumer and :producer_consumer
   :subscribe_to
-    [ProducerModule]
-    | [{ProducerModule, [subscription_options()]}]
+    [stage()]
+    | [{stage(), [subscription_options()]}]
+
+  where stage() commonly is:
+    pid
+    | ProducerModuleRegisteredName
+    | {:via, Registry, {RegistryName, key}}
 ```
 
 #### handle_call
@@ -1616,22 +1740,32 @@ handle_events(events :: [event], from(), state) ::
 
 #### handle_subscribe
 Invoked in both producers and consumers when consumer subscribes to producer.
+For example :producer_consumer may have handle_subscribe called 2 times: 
+```elixir
+def handle_subscribe(:producer, _opts, from, state), do:
+  GenStage.ask(from, 1)
+  {:manual, Map.put(state, :from, from)}
+def handle_subscribe(:consumer, _opts, _from, state), do:
+  {:automatic, state}
+```
+
 ```elixir
 handle_subscribe(
   producer_or_consumer :: :producer | :consumer,
   subscription_options(),
   from(),
-  state :: term()
+  state
 ) :: 
   {:automatic | :manual, new_state} 
   | {:stop, reason, new_state}
 
   # {:automatic, new_state} (default)
-  # demand is sent automatically to producer
+  # demand is automatically sent to producer, using :mix/max_demand
 
   # {:manual, new_state}
-  # supported only by Consumers
+  # supported only by Consumers and ProducersConsumers
   # demand must be sent via ask(from(), demand)
+  # :mix/max_demand not supported in this mode.
 ```
 
 #### handle_cancel
@@ -1654,6 +1788,7 @@ handle_cancel(
 #### stage().t
 Stage registered name or pid
 ```elixir
+
 stage() ::
   pid()
   | atom()
@@ -1668,6 +1803,9 @@ from() ::
   {pid(), subscription_tag()}
 # Can be obtained in handle_subscribe/4, and stored in stage's state.
 ```
+#### stage().t
+stage
+
 #### subscription_options().t
 Option used by the subscribe* functions
 ```elixir
@@ -1716,7 +1854,7 @@ can be used to update `subscription_options`.
 
 ```elixir
 subscribe_args :: 
-  stage, 
+  stage(), 
   subscription_options()
 
 sync_returns ::
@@ -1819,8 +1957,11 @@ Resulting Producer can be used with GenStage or Flow (integrated by use of `Flow
 ```elixir
 GenServer.on_start() ::
   {:ok, pid()} 
-  | :ignore
-  | {:error, {:already_started, pid()} | term()}
+  | :ignore 
+  | {:error, 
+    {:already_started, pid()} 
+    | term()
+  }
 
 producer_opts() ::
   link: \\ true,
@@ -1993,6 +2134,8 @@ GenStage.sync_subscribe(
 
 A supervisor that starts children as events flow in
 Can be used as the consumer in a GenStage pipeline.
+It's called ConsumerSupervisor because it acts as a Consumer (has a subscribe_to option) and is not intended to supervise Consumers.
+Producers, Task or other OTP modules can be started from it.
 
 Can be attached to a producer by returning `:subscribe_to` from `init/1` or explicitly with `GenStage.sync_subscribe/3` and `GenStage.async_subscribe/2`.
 
@@ -2002,22 +2145,23 @@ Once subscribed, the supervisor will:
   (event is appended to the arguments in the child specification)
 - as child processes terminate, the supervisor will accumulate demand and request more events after `:min_demand` is reached
 
+Children must exit after their work is done, otherwise new children can't be started. 
+This means that {:stop, :normal, state} should be done inside children!
+
 ConsumerSupervisor is similar to a pool, except a child process is started per event. 
 `:min_demand` < `amount of concurrent children per producer` < `:max_demand`.
 
 ### Example
 
 ```elixir
-defmodule Consumer do
+defmodule Printer.ConsumerSupervisor do
   use ConsumerSupervisor
 
-  def start_link(arg) do
+  def start_link(arg), do:
     ConsumerSupervisor.start_link(__MODULE__, arg)
-  end
 
-  def init(_arg) do
-    # Note: By default child.restart = :permanent
-    # ConsumerSupervisor supports only :termporary or :transient
+  def init(_arg), do:
+    # ConsumerSupervisor supports only :termporary or :transient restart
     children = [%{
         id: Printer, 
         start: {Printer, :start_link, []}, 
@@ -2028,22 +2172,21 @@ defmodule Consumer do
         subscribe_to: [{Producer, max_demand: 50}]
     ]
     ConsumerSupervisor.init(children, opts)
-  end
-end
-
-defmodule Printer do
-  def start_link(event) do
-    # Note: this function must:
-    # - return the format of {:ok, pid}
-    # - like all children started by a Supervisor, 
-    #   the process must be linked back to the supervisor
-    # Task.start_link/1 satisfies these requirements
-    Task.start_link(fn ->
-      IO.inspect({self(), event})
-    end)
-  end
 end
 ```
+```elixir
+defmodule Printer do
+  def start_link(event), do:
+    Task.start_link(__MODULE__, :process_event, [event])
+end
+```
+
+`start_link/1` function of ConsumerSupervisor's child must:
+- return the format of {:ok, pid}
+- like all children started by a Supervisor, the process must be linked back to the supervisor
+
+To make it clear, ConsumerSupervisor can have ANY OTP module as child.
+For example a ChildPrinter could instantiate another ConsumerSupervisor using `start_link` inside it's `init` callback. This would create 2-level ConsumerSupervisor tree. Freedom!
 
 ### Callbacks
 

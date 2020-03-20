@@ -45,7 +45,7 @@ end
 ```elixir
 defmodule Printer do
   def start_link(event), do:
-    Task.start_link(fn -> IO.inspect({self(), event}) end)
+    Task.start_link(__MODULE__, :process_event, [event])
 end
 ```
 

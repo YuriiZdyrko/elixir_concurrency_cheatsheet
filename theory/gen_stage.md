@@ -1,7 +1,9 @@
 ## GenStage
 
+A specification for exchanging events with back-pressure between Elixir producers and consumers.
+
 Stages are famous for:
-- **back-pressure** to limit load on our own and/or external systems, also helps avoid buffer overload.
+- **back-pressure** to limit load on our own and/or external systems
 - **buffering** to keep events before demand arrives
 - leveraging **concurrency**
 - support of **fault-tolerance** like any other OTP behaviour,
@@ -481,8 +483,8 @@ init(args) ::
     :accumulate
     # accumulate demand until set to :forward via demand/2
 
-# :accumulate is useful as a synchronization mechanism, 
-# where the demand is accumulated until all consumers are subscribed. 
+# :accumulate can be useful as a synchronization mechanism, 
+# to accumulate demand until all consumers are subscribed. 
 
 :producer and :producer_consumer
   :buffer_size

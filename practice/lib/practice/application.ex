@@ -10,7 +10,7 @@ defmodule Practice.Application do
       # Starts a worker by calling: Practice.Worker.start_link(arg)
       {Task.Supervisor, name: Practice.TaskSupervisor},
       Practice.Async,
-      DP.AppSupervisor
+      # DP.AppSupervisor
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

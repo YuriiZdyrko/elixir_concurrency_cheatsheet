@@ -16,6 +16,17 @@ https://medium.com/@StevenLeiva1/elixir-process-registries-a27f813d94e3
 
 ### GenStage
 
+#### Videos
+https://www.youtube.com/watch?v=M78r_PDlw2c
+https://www.youtube.com/watch?v=XPlXNUXmcgE
+
+#### Repos
+
+Two SQS adapters:
+https://github.com/conduitframework/conduit_sqs/blob/master/lib/conduit_sqs/poller.ex
+https://github.com/dashbitco/broadway_sqs/blob/master/lib/broadway_sqs/producer.ex
+
+#### Tutorials
 Great production-style example. 
 Probably most sophisticated around. Big ideas:
 - showcased deeply nested GenStage hierarchy
@@ -32,21 +43,27 @@ Article about dynamically modifying pipeline.
 It's possible, by reliance on GenServer.cancel
 https://stackoverflow.com/questions/52968929/runtime-dynamic-compute-graph-using-elixir-genstages
 
-Not enough depth. More Blockchain than elixir.
-https://blog.appsignal.com/2018/11/13/elixir-alchemy-understanding-elixirs-genstages-querying-the-blockchain.html
-
 Very good showcasing of fault-tolerance.
 Example of 0..N producers to 1 Consumer.
 `going_deep_with_concurrency/practice/lib/dynamic_producer` (iex - ready)
 https://norbertka.me/posts/dynamic_genstage_producers/
 
-
+Basic push-based (as opposite to demand-based) Producer
 https://blog.jola.dev/push-based-genstage
 
+Example of using Rate Limiting for doing search suggestions
+https://www.programmableweb.com/news/how-to-use-genstage-and-websockets-to-optimize-consumption-rate-limited-apis/how-to/2018/05/20
+
+Bare-bones buffer-limiting Producer +
+Consumer that does all-the-work.
+https://blog.discordapp.com/how-discord-handles-push-request-bursts-of-over-a-million-per-minute-with-elixirs-genstage-8f899f0221b4#.i3c7192m9
+
+Interesting to see my chicken used for video-progress
+Example of removing expired buffered events. Usage of metrics for monitoring.
+https://blog.emerleite.com/using-elixir-genstage-to-track-video-watch-progress-9b114786c604
 
 ### Flow
 
-Useful for CPU or IO bound work
 https://www.slideshare.net/Elixir-Meetup/genstage-and-flow-jose-valim
 
 
@@ -67,7 +84,7 @@ https://github.com/parroty/extwitter
 # OAUTH, Streams, using HTTP streaming Twitter api, GenStage:
 https://github.com/parroty/extwitter/blob/master/lib/extwitter/api/streaming.ex
 
-usage example:
+usage example:  
 https://levelup.gitconnected.com/building-a-twitter-emoji-map-with-elixirs-genstage-phoenix-channels-and-angular-134319061b8a
 
 
