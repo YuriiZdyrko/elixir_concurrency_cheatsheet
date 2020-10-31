@@ -1,3 +1,5 @@
+#### Elixir concurrency cheatsheet
+
 ### Project description
 
 I wanted to have more readable and printable version of Elixir docs.
