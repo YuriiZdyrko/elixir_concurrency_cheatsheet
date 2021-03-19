@@ -59,7 +59,7 @@ init_option() ::
 Where extra_arguments is `init` arguments, that will be prepended to `start_child` arguments for each started child.
 
 ### Functions
-```
+```elixir
 child_spec/1
 count_children/1
 init/1

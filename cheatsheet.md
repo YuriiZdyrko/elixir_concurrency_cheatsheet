@@ -726,7 +726,7 @@ init_option() ::
 Where extra_arguments is `init` arguments, that will be prepended to `start_child` arguments for each started child.
 
 ### Functions
-```
+```elixir
 child_spec/1
 count_children/1
 init/1
@@ -1227,7 +1227,7 @@ Consumer <-> Producer is a **many-to-many** relationship.
 - send events to given subscription, using return value of `handle_call`, `handle_info`, `handle_demand`, `handle_cast` callbacks.
 
 #### Protocol visualization
-```
+```elixir
  --- EVENTS (downstream) --->
   [A]  --->  [B]  ---> [C]
  <--- DEMAND (upstream) ---  
